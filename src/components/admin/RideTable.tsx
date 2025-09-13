@@ -7,6 +7,9 @@ import { Ride } from '@/types/user';
 interface RideTableProps {
   rides: Ride[];
   onCancel: (rideId: number) => void;
+  currentPage: number;
+  total: number;
+  onPageChange: (page: number) => void;
 }
 
 const statusColors: Record<string, string> = {
