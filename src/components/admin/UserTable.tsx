@@ -10,21 +10,16 @@ interface UserTableProps {
   onBan: (userId: number, banned: boolean) => void;
 }
 
-// utils/imageUtils.ts
+// Utility to safely get image URL
 export const getSafeUrl = (url: string | null) => {
   if (!url) return '';
-  
-  // If it's already a full URL (Cloudinary case)
-  if (url.startsWith('http')) {
-    return url;
-  }
-  
-  // If it's an old-style path (shouldn't happen with new uploads)
+  if (url.startsWith('http')) return url;
   return `${url}`;
 };
 
 const UserTable: React.FC<UserTableProps> = ({ users, onVerify, onBan }) => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -87,6 +82,7 @@ const UserTable: React.FC<UserTableProps> = ({ users, onVerify, onBan }) => {
         </table>
       </div>
 
+      {/* User Details Modal */}
       {selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl">
@@ -101,13 +97,13 @@ const UserTable: React.FC<UserTableProps> = ({ users, onVerify, onBan }) => {
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h4 className="text-sm font-medium text-gray-500">Personal Information</h4>
-                  <div className="mt-2 space-y-2">
-                    <p className='text-black'><span className="font-medium text-black">Name:</span> {selectedUser.first_name} {selectedUser.last_name}</p>
-                    <p className='text-black'><span className="font-medium text-black">Email:</span> {selectedUser.email}</p>
-                    <p className='text-black'><span className="font-medium text-black">Phone:</span> {selectedUser.phone_number}</p>
-                    <p className='text-black'><span className="font-medium text-black">Join Date:</span> {new Date(selectedUser.created_at).toLocaleDateString()}</p>
-                    {selectedUser.age && <p><span className="font-medium text-black">Age:</span> {selectedUser.age}</p>}
-                    {selectedUser.gender && <p><span className="font-medium text-black">Gender:</span> {selectedUser.gender}</p>}
+                  <div className="mt-2 space-y-2 text-black">
+                    <p><span className="font-medium">Name:</span> {selectedUser.first_name} {selectedUser.last_name}</p>
+                    <p><span className="font-medium">Email:</span> {selectedUser.email}</p>
+                    <p><span className="font-medium">Phone:</span> {selectedUser.phone_number}</p>
+                    <p><span className="font-medium">Join Date:</span> {new Date(selectedUser.created_at).toLocaleDateString()}</p>
+                    {selectedUser.age && <p><span className="font-medium">Age:</span> {selectedUser.age}</p>}
+                    {selectedUser.gender && <p><span className="font-medium">Gender:</span> {selectedUser.gender}</p>}
                   </div>
                 </div>
 
@@ -134,7 +130,7 @@ const UserTable: React.FC<UserTableProps> = ({ users, onVerify, onBan }) => {
 
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-gray-500 mb-2">ID Document</h4>
-                    {selectedUser?.id_image_url ? (
+                    {selectedUser.id_image_url ? (
                       <div className="bg-gray-100 rounded-lg p-4 flex justify-center">
                         {selectedUser.id_image_url.endsWith('.pdf') ? (
                           <div className="flex flex-col items-center">
@@ -152,19 +148,8 @@ const UserTable: React.FC<UserTableProps> = ({ users, onVerify, onBan }) => {
                           <img 
                             src={getSafeUrl(selectedUser.id_image_url)}
                             alt="ID Document" 
-                            className="max-w-full h-40 object-contain"
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              const parent = e.currentTarget.parentElement;
-                              if (parent) {
-                                parent.innerHTML = `
-                                  <div class="text-center p-4 text-gray-500">
-                                    <span class="material-icons text-4xl">broken_image</span>
-                                    <p>Failed to load image</p>
-                                  </div>
-                                `;
-                              }
-                            }}
+                            className="max-w-full h-40 object-contain rounded-lg shadow-sm cursor-pointer"
+                            onClick={() => setShowImageModal(true)}
                           />
                         )}
                       </div>
@@ -179,9 +164,7 @@ const UserTable: React.FC<UserTableProps> = ({ users, onVerify, onBan }) => {
 
               <div className="mt-6 flex justify-end space-x-3">
                 <Button variant="secondary" onClick={() => setSelectedUser(null)}>Close</Button>
-                {!selectedUser.id_verified && (
-                  <Button onClick={() => onVerify(selectedUser.id)}>Verify ID</Button>
-                )}
+                {!selectedUser.id_verified && <Button onClick={() => onVerify(selectedUser.id)}>Verify ID</Button>}
                 <Button 
                   variant="danger"
                   onClick={() => onBan(selectedUser.id, !selectedUser.banned)}
@@ -190,6 +173,27 @@ const UserTable: React.FC<UserTableProps> = ({ users, onVerify, onBan }) => {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image fullscreen modal */}
+      {showImageModal && selectedUser?.id_image_url && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4">
+          <div className="relative max-w-4xl w-full">
+            {/* Close button */}
+            <button
+              className="absolute top-2 right-2 z-50 text-white text-3xl font-bold hover:text-gray-300"
+              onClick={() => setShowImageModal(false)}
+            >
+              &times;
+            </button>
+            {/* Image */}
+            <img 
+              src={getSafeUrl(selectedUser.id_image_url)} 
+              alt="Full ID Document" 
+              className="w-full h-auto rounded-lg shadow-lg object-contain relative z-40"
+            />
           </div>
         </div>
       )}

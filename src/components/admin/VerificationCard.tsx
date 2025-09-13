@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Button from '../ui/Button';
 import { User } from '@/types/user';
 
@@ -8,6 +9,8 @@ interface VerificationCardProps {
 }
 
 const VerificationCard: React.FC<VerificationCardProps> = ({ user, onVerify, onReject }) => {
+  const [showModal, setShowModal] = useState(false);
+
   const imageUrl = user.id_image_url 
     ? `${user.id_image_url}`
     : null;
@@ -47,10 +50,11 @@ const VerificationCard: React.FC<VerificationCardProps> = ({ user, onVerify, onR
                 </a>
               </div>
             ) : (
-              <img 
-                src={imageUrl} 
-                alt="ID Document" 
-                className="max-w-full max-h-40 object-contain"
+              <img
+                src={imageUrl}
+                alt="ID Document"
+                className="max-w-full max-h-40 object-contain rounded-lg shadow-sm cursor-pointer"
+                onClick={() => setShowModal(true)}
                 onError={(e) => {
                   e.currentTarget.onerror = null;
                   e.currentTarget.style.display = 'none';
@@ -64,7 +68,26 @@ const VerificationCard: React.FC<VerificationCardProps> = ({ user, onVerify, onR
           </div>
         )}
       </div>
-      
+
+      {/* Modal for full screen image */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4">
+          <div className="relative max-w-4xl w-full">
+            <button
+              className="absolute top-2 right-2 text-white text-3xl font-bold hover:text-gray-300"
+              onClick={() => setShowModal(false)}
+            >
+              &times;
+            </button>
+            <img 
+              src={imageUrl!} 
+              alt="Full ID Document" 
+              className="w-full h-auto rounded-lg shadow-lg object-contain"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 flex justify-between">
         <div>
           <p className="text-sm text-gray-500">User ID: {user.id}</p>
