@@ -4,8 +4,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
+/* Global font */
 body {
   font-family: 'Inter', sans-serif;
+  color: #000 !important; /* default text black */
+}
+
+/* Override all Tailwind gray text classes */
+.text-gray-50, .text-gray-100, .text-gray-200, .text-gray-300,
+.text-gray-400, .text-gray-500, .text-gray-600, .text-gray-700,
+.text-gray-800, .text-gray-900 {
+  color: #000 !important;
+}
+
+/* Ensure any element without a color explicitly set uses black */
+* {
+  color: #000 !important;
+}
+
+/* Optional: headings, paragraphs, spans, links, list items, etc. */
+h1, h2, h3, h4, h5, h6, p, span, div, a, li, label {
+  color: #000 !important;
 }
 
 .material-icons {
