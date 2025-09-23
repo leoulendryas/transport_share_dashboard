@@ -4,16 +4,23 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { usePathname } from 'next/navigation';
 
-const Sidebar = () => {
+interface SidebarProps {
+  activeTab: 'users' | 'rides' | 'verifications' | 'reports' | 'payments' | 'config';
+  onTabChange: (tab: SidebarProps['activeTab']) => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { admin, logout } = useAuth();
   const pathname = usePathname();
   
   const menuItems = [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: 'dashboard' },
-    { name: 'Users', href: '/admin/users', icon: 'people' },
-    { name: 'Rides', href: '/admin/rides', icon: 'directions_car' },
-    { name: 'Verifications', href: '/admin/verifications', icon: 'verified' },
-    { name: 'Reports', href: '/admin/reports', icon: 'analytics' },
+    { name: 'Dashboard', key: 'users', icon: 'dashboard', href: '/admin/dashboard' },
+    { name: 'Users', key: 'users', icon: 'people', href: '/admin/users' },
+    { name: 'Rides', key: 'rides', icon: 'directions_car', href: '/admin/rides' },
+    { name: 'Verifications', key: 'verifications', icon: 'verified', href: '/admin/verifications' },
+    { name: 'Reports', key: 'reports', icon: 'analytics', href: '/admin/reports' },
+    { name: 'Payments', key: 'payments', icon: 'credit_card', href: '/admin/payments' },
+    { name: 'Config', key: 'config', icon: 'settings', href: '/admin/config' },
   ];
 
   return (
@@ -27,16 +34,16 @@ const Sidebar = () => {
         <nav>
           <ul>
             {menuItems.map((item) => (
-              <li key={item.name} className="mb-1">
-                <Link
-                  href={item.href}
-                  className={`flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors ${
-                    pathname === item.href ? 'bg-gray-700 text-white' : ''
+              <li key={item.key} className="mb-1">
+                <button
+                  onClick={() => onTabChange(item.key as SidebarProps['activeTab'])}
+                  className={`w-full text-left flex items-center px-6 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors ${
+                    activeTab === item.key ? 'bg-gray-700 text-white' : ''
                   }`}
                 >
                   <span className="material-icons mr-3">{item.icon}</span>
                   <span>{item.name}</span>
-                </Link>
+                </button>
               </li>
             ))}
           </ul>
