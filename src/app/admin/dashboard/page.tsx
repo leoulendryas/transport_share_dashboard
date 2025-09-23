@@ -6,58 +6,92 @@ import { useAuth } from '@/context/AuthContext';
 import Sidebar from '@/components/admin/Sidebar';
 import Header from '@/components/admin/Header';
 import StatsCard from '@/components/admin/StatsCard';
-import UserTable from '@/components/admin/UserTable';
-import VerificationCard from '@/components/admin/VerificationCard';
-import RideTable from '@/components/admin/RideTable';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { User, Stats, Ride } from '@/types/user';
+import { User, PendingVerification, Stats, Ride } from '@/types/user';
 import { 
   getUsers, 
   getPendingVerifications, 
   verifyUserID, 
-  banUser as apiBanUser, 
+  banUser, 
   rejectVerification,
   getDashboardStats,
   getRides,
   adminCancelRide
 } from '@/lib/api';
 
+// Pages
+import UsersPage from '@/components/admin/pages/UsersPage';
+import VerificationsPage from '@/components/admin/pages/VerificationsPage';
+import RidesPage from '@/components/admin/pages/RidesPage';
+import ReportsPage from '@/components/admin/pages/ReportsPage';
+import PaymentsPage from '@/components/admin/pages/PaymentsPage';
+
 export default function DashboardPage() {
   const { admin, token, loading: authLoading, refreshAuthToken } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
+
+  // Users & verifications
   const [users, setUsers] = useState<User[]>([]);
-  const [verifications, setVerifications] = useState<User[]>([]);
+  const [verifications, setVerifications] = useState<PendingVerification[]>([]);
+
+  // Rides
   const [rides, setRides] = useState<Ride[]>([]);
-  const [activeTab, setActiveTab] = useState<'users' | 'rides'>('users');
   const [currentRidePage, setCurrentRidePage] = useState(1);
   const [totalRides, setTotalRides] = useState(0);
+
+  const [activeTab, setActiveTab] = useState<
+    'users' | 'rides' | 'verifications' | 'reports' | 'payments' | 'config'
+  >('users');
+
   const router = useRouter();
 
-  const fetchData = async (token: string) => {
+  const fetchAllData = async (token: string) => {
     setIsLoading(true);
     try {
+      // Fetch data in parallel
       const [usersData, verificationsData, statsData, ridesData] = await Promise.all([
         getUsers(token),
         getPendingVerifications(token),
         getDashboardStats(token),
-        getRides(token, currentRidePage, 5)
+        getRides(token, currentRidePage, 10) // Updated limit to 10
       ]);
-      
-      setUsers(usersData);
-      setVerifications(verificationsData);
+
+      // Update state with fetched data
+      setUsers(usersData); // Now returns array directly, no .results
+      setVerifications(verificationsData); // Now returns array directly, no .results
       setStats(statsData);
-      setRides(ridesData.results);
-      setTotalRides(ridesData.pagination.total);
+      
+      // Handle paginated rides response
+      if (ridesData && ridesData.results) {
+        setRides(ridesData.results);
+        setTotalRides(ridesData.pagination?.total || 0);
+      } else {
+        setRides([]);
+        setTotalRides(0);
+      }
     } catch (error: any) {
-      if (error.message.includes('401')) {
-        const newToken = await refreshAuthToken();
-        if (newToken) {
-          await fetchData(newToken);
+      console.error('Failed to fetch data:', error);
+      
+      // Handle token expiration
+      if (error.message.includes('401') || error.message.includes('403')) {
+        try {
+          const newToken = await refreshAuthToken();
+          if (newToken) {
+            await fetchAllData(newToken);
+            return;
+          }
+        } catch (refreshError) {
+          console.error('Token refresh failed:', refreshError);
+          router.push('/admin/login');
           return;
         }
       }
-      console.error('Failed to fetch data:', error);
+      
+      // Set empty states on error
+      setUsers([]);
+      setVerifications([]);
+      setRides([]);
     } finally {
       setIsLoading(false);
     }
@@ -65,36 +99,60 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!authLoading) {
-      if (!admin) {
+      if (!admin || !token) {
         router.push('/admin/login');
-      } else if (token) {
-        fetchData(token);
+      } else {
+        fetchAllData(token);
       }
     }
   }, [admin, authLoading, token, router, currentRidePage]);
 
+  // User handlers
   const handleVerify = async (userId: number) => {
     if (!token) return;
     
     try {
       await verifyUserID(token, userId);
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, id_verified: true } : user
-      ));
-      setVerifications(verifications.filter(user => user.id !== userId));
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId ? { ...user, id_verified: true } : user
+        )
+      );
+      setVerifications(prevVerifications => 
+        prevVerifications.filter(verification => verification.id !== userId)
+      );
+      
+      // Refresh stats to get updated counts
+      const updatedStats = await getDashboardStats(token);
+      setStats(updatedStats);
+      
     } catch (error) {
       console.error('Failed to verify user:', error);
+      alert('Failed to verify user. Please try again.');
     }
   };
 
-  const handleReject = async (userId: number) => {
+  const handleReject = async (userId: number, reason: string = 'Rejected by admin') => {
     if (!token) return;
     
     try {
-      await rejectVerification(token, userId);
-      setVerifications(verifications.filter(user => user.id !== userId));
+      await rejectVerification(token, userId, reason);
+      
+      // Update local state
+      setVerifications(prevVerifications => 
+        prevVerifications.filter(verification => verification.id !== userId)
+      );
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId ? { ...user, id_verified: false, id_image_url: undefined } : user
+        )
+      );
+      
     } catch (error) {
       console.error('Failed to reject verification:', error);
+      alert('Failed to reject verification. Please try again.');
     }
   };
 
@@ -102,21 +160,32 @@ export default function DashboardPage() {
     if (!token) return;
     
     try {
-      await apiBanUser(token, userId, banned);
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, banned } : user
-      ));
+      await banUser(token, userId, banned);
+      
+      // Update local state
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId ? { ...user, banned } : user
+        )
+      );
+      
     } catch (error) {
-      console.error('Failed to ban user:', error);
+      console.error('Failed to update user status:', error);
+      alert('Failed to update user status. Please try again.');
     }
   };
 
+  // Ride handlers
   const handleCancelRide = async (rideId: number) => {
     if (!token) return;
     
     try {
       await adminCancelRide(token, rideId);
-      setRides(rides.filter(ride => ride.id !== rideId));
+      
+      // Update local state
+      setRides(prevRides => prevRides.filter(ride => ride.id !== rideId));
+      
+      // Update stats
       if (stats) {
         setStats({
           ...stats,
@@ -128,8 +197,10 @@ export default function DashboardPage() {
           }
         });
       }
+      
     } catch (error) {
       console.error('Failed to cancel ride:', error);
+      alert('Failed to cancel ride. Please try again.');
     }
   };
 
@@ -137,131 +208,170 @@ export default function DashboardPage() {
     setCurrentRidePage(page);
   };
 
-  if (authLoading || isLoading) {
+  const handleRefreshData = () => {
+    if (token) {
+      fetchAllData(token);
+    }
+  };
+
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner size="lg" />
+        <span className="ml-2">Checking authentication...</span>
+      </div>
+    );
+  }
+
+  if (!admin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-2">Redirecting to login...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
       
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6">
-          <Header 
-            title="Admin Dashboard" 
-            description="Manage users, verifications, rides, and monitor platform activity"
-          />
-          
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header
+          title="Admin Dashboard"
+          description="Manage users, verifications, rides, reports, payments, and system config"
+          onRefresh={handleRefreshData}
+        />
+        
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            <StatsCard 
-              title="Total Users" 
-              value={stats?.totalUsers || 0} 
-              icon="people" 
-              color="bg-blue-500" 
+            <StatsCard
+              title="Total Users"
+              value={stats?.totalUsers || 0}
+              icon="people"
+              color="bg-blue-500"
+              loading={isLoading}
             />
-            <StatsCard 
-              title="Active Rides" 
-              value={stats?.activeRides || 0} 
-              icon="directions_car" 
-              color="bg-green-500" 
+            <StatsCard
+              title="Active Rides"
+              value={stats?.activeRides || 0}
+              icon="directions_car"
+              color="bg-green-500"
+              loading={isLoading}
             />
-            <StatsCard 
-              title="Pending Verifications" 
-              value={stats?.pendingVerifications || 0} 
-              icon="verified" 
-              color="bg-yellow-500" 
+            <StatsCard
+              title="Pending Verifications"
+              value={stats?.pendingVerifications || 0}
+              icon="verified"
+              color="bg-yellow-500"
+              loading={isLoading}
             />
-            <StatsCard 
-              title="Total Rides" 
-              value={stats?.rideStats?.totalRides || 0} 
-              icon="route" 
-              color="bg-purple-500" 
+            <StatsCard
+              title="Reports"
+              value={stats?.reports || 0}
+              icon="report"
+              color="bg-red-500"
+              loading={isLoading}
             />
           </div>
-          
-          <div className="mb-6 border-b border-gray-200">
-            <nav className="flex space-x-8">
-              <button
-                className={`pb-3 px-1 font-medium text-sm ${
-                  activeTab === 'users'
-                    ? 'border-b-2 border-blue-500 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                onClick={() => setActiveTab('users')}
-              >
-                User Management
-              </button>
-              <button
-                className={`pb-3 px-1 font-medium text-sm ${
-                  activeTab === 'rides'
-                    ? 'border-b-2 border-blue-500 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                onClick={() => setActiveTab('rides')}
-              >
-                Ride Management
-              </button>
-            </nav>
-          </div>
-          
-          {activeTab === 'users' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-              <div className="lg:col-span-2">
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-lg font-bold text-gray-800">Recent Users</h2>
-                  </div>
-                  <UserTable 
-                    users={users} 
-                    onVerify={handleVerify} 
-                    onBan={handleBan} 
-                  />
-                </div>
-              </div>
-              
-              <div>
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-lg font-bold text-gray-800">Pending Verifications</h2>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {verifications.length > 0 ? (
-                      verifications.map(user => (
-                        <VerificationCard 
-                          key={user.id}
-                          user={user}
-                          onVerify={handleVerify}
-                          onReject={handleReject}
-                        />
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        No pending verifications
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-bold text-gray-800">Recent Rides</h2>
-              </div>
-              <RideTable 
-                rides={rides} 
-                onCancel={handleCancelRide}
-                currentPage={currentRidePage}
-                total={totalRides}
-                onPageChange={handleRidePageChange}
+
+          {/* Ride Stats Subgrid */}
+          {stats?.rideStats && (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+              <StatsCard
+                title="Total Rides"
+                value={stats.rideStats.totalRides || 0}
+                icon="route"
+                color="bg-purple-500"
+                size="sm"
+              />
+              <StatsCard
+                title="Completed"
+                value={stats.rideStats.completedRides || 0}
+                icon="check_circle"
+                color="bg-green-500"
+                size="sm"
+              />
+              <StatsCard
+                title="Cancelled"
+                value={stats.rideStats.cancelledRides || 0}
+                icon="cancel"
+                color="bg-red-500"
+                size="sm"
+              />
+              <StatsCard
+                title="Disputed"
+                value={stats.rideStats.disputedRides || 0}
+                icon="warning"
+                color="bg-orange-500"
+                size="sm"
+              />
+              <StatsCard
+                title="Avg Seats"
+                value={stats.rideStats.averageSeats ? Math.round(stats.rideStats.averageSeats) : 0}
+                icon="airline_seat_recline_normal"
+                color="bg-indigo-500"
+                size="sm"
               />
             </div>
           )}
+
+          {/* Tab Content */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            {isLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <LoadingSpinner size="lg" />
+                <span className="ml-2 text-gray-600">Loading {activeTab}...</span>
+              </div>
+            ) : (
+              <>
+                {activeTab === 'users' && (
+                  <UsersPage 
+                    users={users} 
+                    onBan={handleBan} 
+                    loading={isLoading}
+                  />
+                )}
+                
+                {activeTab === 'verifications' && (
+                  <VerificationsPage
+                    verifications={verifications}
+                    onVerify={handleVerify}
+                    onReject={handleReject}
+                    loading={isLoading}
+                  />
+                )}
+                
+                {activeTab === 'rides' && (
+                  <RidesPage
+                    rides={rides}
+                    currentPage={currentRidePage}
+                    total={totalRides}
+                    onCancel={handleCancelRide}
+                    onPageChange={handleRidePageChange}
+                    loading={isLoading}
+                  />
+                )}
+                
+                {activeTab === 'reports' && (
+                  <ReportsPage loading={isLoading} />
+                )}
+                
+                {activeTab === 'payments' && (
+                  <PaymentsPage loading={isLoading} />
+                )}
+                
+                {activeTab === 'config' && (
+                  <div className="p-6 text-center text-gray-500">
+                    System Configuration - Coming Soon
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
