@@ -10,12 +10,19 @@ export interface User {
   id_verified: boolean;
   banned: boolean;
   is_admin: boolean;
-  is_driver: boolean;
   id_image_url?: string;
   age?: number;
   gender?: string;
   profile_image_url?: string;
-  verification_status?: 'pending' | 'approved' | 'rejected';
+  verification_submitted_at?: string;
+  preferred_bank?: string;
+  bank_account_number?: string;
+}
+
+export interface AdminLoginResponse {
+  access_token: string;
+  refresh_token: string;
+  user: User;
 }
 
 export interface IDVerificationData {
@@ -24,6 +31,22 @@ export interface IDVerificationData {
   age: number;
   gender: 'male' | 'female' | 'other';
   id_type: string;
+  preferred_bank?: string;
+  bank_account_number?: string;
+}
+
+export interface PendingVerification {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string | null;
+  created_at: string;
+  id_image_url: string;
+  age?: number;
+  gender?: string;
+  preferred_bank?: string;
+  bank_account_number?: string;
 }
 
 export interface Admin {
@@ -39,6 +62,15 @@ export interface Stats {
   activeRides: number;
   pendingVerifications: number;
   reports: number;
+  rideStats: RideStats;
+}
+
+// NEW: RideParticipant type
+export interface RideParticipant {
+  first_name: string;
+  last_name: string;
+  email: string;
+  is_driver?: boolean; // optional flag
 }
 
 export interface Ride {
@@ -56,7 +88,7 @@ export interface Ride {
   brand_name: string;
   price_per_seat: number;
   driver?: User;
-  participants?: User[];
+  participants?: RideParticipant[]; // updated type here
 }
 
 export interface RideStats {
@@ -68,10 +100,64 @@ export interface RideStats {
   averageSeats: number;
 }
 
-export interface Stats {
-  totalUsers: number;
-  activeRides: number;
-  pendingVerifications: number;
-  reports: number;
-  rideStats: RideStats;
+export interface Report {
+  id: number;
+  reporter_id: number;
+  reported_user_id: number;
+  ride_id?: number;
+  reason: string;
+  resolved: boolean;
+  created_at: string;
+  status?: 'pending' | 'resolved';
+}
+
+export type Payment = {
+  id: number;
+  ride_id: number;
+  driver_id: number;
+  driver_email: string;
+  amount: number;
+  status: string;
+  created_at: string;
+  from_address?: string;
+  to_address?: string;
+};
+
+export interface Config {
+  id: number;
+  key: string;
+  value: string;
+  updated_at: string;
+  maxRideDistance: number;
+  commissionRate: number;
+  supportEmail: string;
+}
+
+export interface VerificationStatus {
+  status: 'banned' | 'not_submitted' | 'pending' | 'verified';
+  message: string;
+  submitted_at: string | null;
+}
+
+export interface LoginCredentials {
+  email?: string;
+  phone_number?: string;
+  password: string;
+}
+
+export interface OTPLoginCredentials {
+  phone_number: string;
+  otp: string;
+}
+
+export interface RefreshTokenResponse {
+  access_token: string;
+  refresh_token: string;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
 }
