@@ -46,30 +46,10 @@ const getFormDataHeaders = (token?: string): HeadersInit => {
 
 // Admin login
 export const adminLogin = async (email: string, password: string): Promise<AdminLoginResponse> => {
-  const response = await fetch(`${API_BASE_URL}/auth/admin/login`, {
+  const response = await fetch(`${API_BASE_URL}/admin/login`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ email, password }),
-  });
-  return handleResponse<AdminLoginResponse>(response);
-};
-
-// Regular login
-export const login = async (credentials: LoginCredentials): Promise<AdminLoginResponse> => {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(credentials),
-  });
-  return handleResponse<AdminLoginResponse>(response);
-};
-
-// OTP login
-export const loginWithOTP = async (credentials: OTPLoginCredentials): Promise<AdminLoginResponse> => {
-  const response = await fetch(`${API_BASE_URL}/auth/login-otp`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(credentials),
   });
   return handleResponse<AdminLoginResponse>(response);
 };
