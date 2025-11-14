@@ -13,6 +13,7 @@ import {
   getPendingVerifications, 
   verifyUserID, 
   banUser, 
+  unbanUser,
   rejectVerification,
   getDashboardStats,
   getRides,
@@ -31,11 +32,11 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
 
-  // Users & verifications
+  // Users & verifications (without pagination)
   const [users, setUsers] = useState<User[]>([]);
   const [verifications, setVerifications] = useState<PendingVerification[]>([]);
 
-  // Rides
+  // Rides (with pagination)
   const [rides, setRides] = useState<Ride[]>([]);
   const [currentRidePage, setCurrentRidePage] = useState(1);
   const [totalRides, setTotalRides] = useState(0);
@@ -49,31 +50,31 @@ export default function DashboardPage() {
   const fetchAllData = async (token: string) => {
     setIsLoading(true);
     try {
-      // Fetch data in parallel
-      const [usersData, verificationsData, statsData, ridesData] = await Promise.all([
-        getUsers(token),
-        getPendingVerifications(token),
-        getDashboardStats(token),
-        getRides(token, currentRidePage, 10) // Updated limit to 10
-      ]);
-
-      // Update state with fetched data
-      setUsers(usersData); // Now returns array directly, no .results
-      setVerifications(verificationsData); // Now returns array directly, no .results
+      // Fetch dashboard stats
+      const statsData = await getDashboardStats(token);
       setStats(statsData);
-      
-      // Handle paginated rides response
-      if (ridesData && ridesData.results) {
-        setRides(ridesData.results);
-        setTotalRides(ridesData.pagination?.total || 0);
-      } else {
-        setRides([]);
-        setTotalRides(0);
+
+      // Fetch data based on active tab
+      switch (activeTab) {
+        case 'users':
+          const usersData = await getUsers(token, 1, 50);
+          setUsers(usersData.results);
+          break;
+        case 'verifications':
+          const verificationsData = await getPendingVerifications(token, 1, 50);
+          setVerifications(verificationsData.results);
+          break;
+        case 'rides':
+          const ridesData = await getRides(token, currentRidePage, 10);
+          setRides(ridesData.results);
+          setTotalRides(ridesData.pagination.total);
+          break;
+        default:
+          break;
       }
     } catch (error: any) {
       console.error('Failed to fetch data:', error);
       
-      // Handle token expiration
       if (error.message.includes('401') || error.message.includes('403')) {
         try {
           const newToken = await refreshAuthToken();
@@ -88,7 +89,6 @@ export default function DashboardPage() {
         }
       }
       
-      // Set empty states on error
       setUsers([]);
       setVerifications([]);
       setRides([]);
@@ -98,14 +98,18 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    if (!authLoading && admin && token) {
+      fetchAllData(token);
+    }
+  }, [admin, authLoading, token, activeTab, currentRidePage]);
+
+  useEffect(() => {
     if (!authLoading) {
       if (!admin || !token) {
         router.push('/admin/login');
-      } else {
-        fetchAllData(token);
       }
     }
-  }, [admin, authLoading, token, router, currentRidePage]);
+  }, [admin, authLoading, token, router]);
 
   // User handlers
   const handleVerify = async (userId: number) => {
@@ -114,7 +118,6 @@ export default function DashboardPage() {
     try {
       await verifyUserID(token, userId);
       
-      // Update local state
       setUsers(prevUsers => 
         prevUsers.map(user => 
           user.id === userId ? { ...user, id_verified: true } : user
@@ -124,7 +127,6 @@ export default function DashboardPage() {
         prevVerifications.filter(verification => verification.id !== userId)
       );
       
-      // Refresh stats to get updated counts
       const updatedStats = await getDashboardStats(token);
       setStats(updatedStats);
       
@@ -134,13 +136,12 @@ export default function DashboardPage() {
     }
   };
 
-  const handleReject = async (userId: number, reason: string = 'Rejected by admin') => {
+  const handleReject = async (userId: number) => {
     if (!token) return;
     
     try {
-      await rejectVerification(token, userId, reason);
+      await rejectVerification(token, userId);
       
-      // Update local state
       setVerifications(prevVerifications => 
         prevVerifications.filter(verification => verification.id !== userId)
       );
@@ -156,22 +157,39 @@ export default function DashboardPage() {
     }
   };
 
-  const handleBan = async (userId: number, banned: boolean) => {
+  const handleBan = async (userId: number) => {
     if (!token) return;
     
     try {
-      await banUser(token, userId, banned);
+      await banUser(token, userId);
       
-      // Update local state
       setUsers(prevUsers => 
         prevUsers.map(user => 
-          user.id === userId ? { ...user, banned } : user
+          user.id === userId ? { ...user, banned: true } : user
         )
       );
       
     } catch (error) {
-      console.error('Failed to update user status:', error);
-      alert('Failed to update user status. Please try again.');
+      console.error('Failed to ban user:', error);
+      alert('Failed to ban user. Please try again.');
+    }
+  };
+
+  const handleUnban = async (userId: number) => {
+    if (!token) return;
+    
+    try {
+      await unbanUser(token, userId);
+      
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId ? { ...user, banned: false } : user
+        )
+      );
+      
+    } catch (error) {
+      console.error('Failed to unban user:', error);
+      alert('Failed to unban user. Please try again.');
     }
   };
 
@@ -182,10 +200,8 @@ export default function DashboardPage() {
     try {
       await adminCancelRide(token, rideId);
       
-      // Update local state
       setRides(prevRides => prevRides.filter(ride => ride.id !== rideId));
       
-      // Update stats
       if (stats) {
         setStats({
           ...stats,
@@ -331,7 +347,8 @@ export default function DashboardPage() {
                 {activeTab === 'users' && (
                   <UsersPage 
                     users={users} 
-                    onBan={handleBan} 
+                    onBan={handleBan}
+                    onUnban={handleUnban}
                     loading={isLoading}
                   />
                 )}

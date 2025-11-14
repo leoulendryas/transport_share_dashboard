@@ -7,8 +7,8 @@ import { Check, X, Eye, User, Calendar, IdCard, Building, Mail, Phone } from 'lu
 
 interface VerificationsPageProps {
   verifications: PendingVerification[];
-  onVerify: (userId: number) => void;
-  onReject: (userId: number, reason: string) => void;
+  onVerify: (userId: number) => Promise<void>; // Removed reason parameter
+  onReject: (userId: number) => Promise<void>; // Removed reason parameter
   loading?: boolean;
 }
 
@@ -19,7 +19,6 @@ export default function VerificationsPage({
   loading = false 
 }: VerificationsPageProps) {
   const [selectedVerification, setSelectedVerification] = useState<PendingVerification | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const handleVerify = (userId: number) => {
@@ -29,14 +28,8 @@ export default function VerificationsPage({
   };
 
   const handleReject = (userId: number) => {
-    if (!rejectReason.trim()) {
-      alert('Please provide a rejection reason');
-      return;
-    }
-    
     if (window.confirm('Are you sure you want to reject this verification?')) {
-      onReject(userId, rejectReason);
-      setRejectReason('');
+      onReject(userId);
       setSelectedVerification(null);
     }
   };
@@ -164,7 +157,7 @@ export default function VerificationsPage({
                   </button>
                   
                   <button
-                    onClick={() => setSelectedVerification(verification)}
+                    onClick={() => handleReject(verification.id)}
                     className="inline-flex items-center justify-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                   >
                     <X className="h-4 w-4 mr-2" />
@@ -174,43 +167,6 @@ export default function VerificationsPage({
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Rejection Modal */}
-      {selectedVerification && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">Reject Verification</h3>
-            <p className="text-sm text-black mb-4">
-              Why are you rejecting {selectedVerification.first_name}'s verification?
-            </p>
-            
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Provide a reason for rejection..."
-              className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500"
-            />
-            
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setSelectedVerification(null);
-                  setRejectReason('');
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-black hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleReject(selectedVerification.id)}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Confirm Reject
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

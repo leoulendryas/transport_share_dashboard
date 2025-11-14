@@ -7,11 +7,12 @@ import { Ban, UserCheck, UserX, Search } from 'lucide-react';
 
 interface UsersPageProps {
   users: User[];
-  onBan: (userId: number, banned: boolean) => void;
+  onBan: (userId: number) => Promise<void>; // Changed from (userId: number, banned: boolean)
+  onUnban: (userId: number) => Promise<void>; // Add this prop
   loading?: boolean;
 }
 
-export default function UsersPage({ users, onBan, loading = false }: UsersPageProps) {
+export default function UsersPage({ users, onBan, onUnban, loading = false }: UsersPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBanned, setFilterBanned] = useState<'all' | 'banned' | 'active'>('all');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -31,9 +32,15 @@ export default function UsersPage({ users, onBan, loading = false }: UsersPagePr
     return matchesSearch && matchesFilter;
   });
 
-  const handleBanToggle = (user: User) => {
-    if (window.confirm(`Are you sure you want to ${user.banned ? 'unban' : 'ban'} ${user.first_name} ${user.last_name}?`)) {
-      onBan(user.id, !user.banned);
+  const handleBan = (user: User) => {
+    if (window.confirm(`Are you sure you want to ban ${user.first_name} ${user.last_name}?`)) {
+      onBan(user.id);
+    }
+  };
+
+  const handleUnban = (user: User) => {
+    if (window.confirm(`Are you sure you want to unban ${user.first_name} ${user.last_name}?`)) {
+      onUnban(user.id);
     }
   };
 
@@ -173,26 +180,23 @@ export default function UsersPage({ users, onBan, loading = false }: UsersPagePr
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleBanToggle(user); }}
-                        className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded ${
-                          user.banned
-                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                            : 'bg-red-100 text-red-700 hover:bg-red-200'
-                        }`}
-                      >
-                        {user.banned ? (
-                          <>
-                            <UserCheck className="h-3 w-3 mr-1" />
-                            Unban
-                          </>
-                        ) : (
-                          <>
-                            <Ban className="h-3 w-3 mr-1" />
-                            Ban
-                          </>
-                        )}
-                      </button>
+                      {user.banned ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleUnban(user); }}
+                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded bg-green-100 text-green-700 hover:bg-green-200"
+                        >
+                          <UserCheck className="h-3 w-3 mr-1" />
+                          Unban
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleBan(user); }}
+                          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded bg-red-100 text-red-700 hover:bg-red-200"
+                        >
+                          <Ban className="h-3 w-3 mr-1" />
+                          Ban
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
