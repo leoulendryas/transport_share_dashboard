@@ -64,97 +64,37 @@ export const refreshToken = async (refreshToken: string): Promise<RefreshTokenRe
   return handleResponse<RefreshTokenResponse>(response);
 };
 
-// Logout
-export const logout = async (token: string): Promise<{ message: string }> => {
-  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
-    method: 'POST',
-    headers: getHeaders(token),
-  });
-  return handleResponse<{ message: string }>(response);
-};
+//
+// 👤 USER MANAGEMENT (ADMIN) - UPDATED TO MATCH BACKEND
+//
 
-// Request OTP
-export const requestOTP = async (phone_number: string): Promise<{ message: string }> => {
-  const response = await fetch(`${API_BASE_URL}/auth/request-otp`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ phone_number }),
-  });
-  return handleResponse<{ message: string }>(response);
-};
-
-// Verify phone
-export const verifyPhone = async (phone_number: string, otp: string): Promise<AdminLoginResponse> => {
-  const response = await fetch(`${API_BASE_URL}/auth/verify-phone`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ phone_number, otp }),
-  });
-  return handleResponse<AdminLoginResponse>(response);
-};
-
-// Resend verification email
-export const resendVerificationEmail = async (email: string): Promise<{ message: string }> => {
-  const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ email }),
-  });
-  return handleResponse<{ message: string }>(response);
-};
-
-// Get verification status
-export const getVerificationStatus = async (token: string): Promise<VerificationStatus> => {
-  const response = await fetch(`${API_BASE_URL}/auth/verification-status`, {
-    method: 'GET',
-    headers: getHeaders(token),
-  });
-  return handleResponse<VerificationStatus>(response);
-};
-
-// Submit ID verification
-export const submitIDVerification = async (
+// Get all users with pagination and filtering
+export const getUsers = async (
   token: string,
-  data: IDVerificationData,
-  file: File
-): Promise<{ status: string; message: string; image_url: string; submitted_at: string }> => {
-  const formData = new FormData();
+  page: number = 1,
+  limit: number = 10,
+  search?: string,
+  banned?: boolean
+): Promise<{ 
+  results: User[]; 
+  pagination: { 
+    page: number; 
+    limit: number; 
+    total: number 
+  } 
+}> => {
+  const url = new URL(`${API_BASE_URL}/admin/users`);
+  url.searchParams.append('page', page.toString());
+  url.searchParams.append('limit', limit.toString());
+  
+  if (search) url.searchParams.append('search', search);
+  if (banned !== undefined) url.searchParams.append('banned', banned.toString());
 
-  formData.append('first_name', data.first_name);
-  formData.append('last_name', data.last_name);
-  formData.append('age', data.age.toString());
-  formData.append('gender', data.gender);
-  formData.append('id_type', data.id_type);
-
-  if (data.preferred_bank) {
-    formData.append('preferred_bank', data.preferred_bank);
-  }
-  if (data.bank_account_number) {
-    formData.append('bank_account_number', data.bank_account_number);
-  }
-
-  formData.append('id_image', file);
-
-  const response = await fetch(`${API_BASE_URL}/auth/verify-identity`, {
-    method: 'POST',
-    headers: getFormDataHeaders(token),
-    body: formData,
-  });
-
-  return handleResponse(response);
-};
-
-//
-// 👤 USER MANAGEMENT (ADMIN)
-//
-
-// Get all users
-export const getUsers = async (token: string): Promise<User[]> => {
-  const response = await fetch(`${API_BASE_URL}/admin/users`, {
+  const response = await fetch(url.toString(), {
     method: 'GET',
     headers: getHeaders(token),
   });
-  return handleResponse<User[]>(response);
+  return handleResponse(response);
 };
 
 // Get user by ID
@@ -180,59 +120,75 @@ export const updateUser = async (
   return handleResponse<User>(response);
 };
 
-// Ban/Unban user
-export const banUser = async (token: string, userId: number, banned: boolean): Promise<{ message: string }> => {
+// Ban user
+export const banUser = async (token: string, userId: number): Promise<{ message: string; user: User }> => {
   const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/ban`, {
     method: 'POST',
     headers: getHeaders(token),
-    body: JSON.stringify({ banned }),
   });
-  return handleResponse<{ message: string }>(response);
+  return handleResponse<{ message: string; user: User }>(response);
 };
 
 // Unban user
-export const unbanUser = async (token: string, userId: number): Promise<{ message: string }> => {
+export const unbanUser = async (token: string, userId: number): Promise<{ message: string; user: User }> => {
   const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/unban`, {
     method: 'POST',
     headers: getHeaders(token),
   });
-  return handleResponse<{ message: string }>(response);
+  return handleResponse<{ message: string; user: User }>(response);
+};
+
+//
+// 🆔 VERIFICATIONS MANAGEMENT - UPDATED TO MATCH BACKEND
+//
+
+// Get pending verifications with pagination
+export const getPendingVerifications = async (
+  token: string,
+  page: number = 1,
+  limit: number = 10
+): Promise<{ 
+  results: PendingVerification[]; 
+  pagination: { 
+    page: number; 
+    limit: number; 
+    total: number 
+  } 
+}> => {
+  const url = new URL(`${API_BASE_URL}/admin/verifications`);
+  url.searchParams.append('page', page.toString());
+  url.searchParams.append('limit', limit.toString());
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: getHeaders(token),
+  });
+  return handleResponse(response);
 };
 
 // Verify user ID (admin)
-export const verifyUserID = async (token: string, userId: number): Promise<{ message: string; user_id: number }> => {
+export const verifyUserID = async (token: string, userId: number): Promise<{ message: string; user: User }> => {
   const response = await fetch(`${API_BASE_URL}/admin/verifications/${userId}/verify`, {
     method: 'POST',
     headers: getHeaders(token),
   });
-  return handleResponse<{ message: string; user_id: number }>(response);
+  return handleResponse<{ message: string; user: User }>(response);
 };
 
 // Reject verification
 export const rejectVerification = async (
   token: string,
-  userId: number,
-  reason: string
-): Promise<{ message: string; user_id: number }> => {
+  userId: number
+): Promise<{ message: string; user: User }> => {
   const response = await fetch(`${API_BASE_URL}/admin/verifications/${userId}/reject`, {
     method: 'POST',
     headers: getHeaders(token),
-    body: JSON.stringify({ reason }),
   });
-  return handleResponse<{ message: string; user_id: number }>(response);
-};
-
-// Get pending verifications
-export const getPendingVerifications = async (token: string): Promise<PendingVerification[]> => {
-  const response = await fetch(`${API_BASE_URL}/admin/verifications`, {
-    method: 'GET',
-    headers: getHeaders(token),
-  });
-  return handleResponse<PendingVerification[]>(response);
+  return handleResponse<{ message: string; user: User }>(response);
 };
 
 //
-// 🚗 RIDES MANAGEMENT (ADMIN)
+// 🚗 RIDES MANAGEMENT (ADMIN) - ALREADY CORRECT
 //
 
 // Get all rides (admin)
@@ -267,13 +223,16 @@ export const getRideById = async (token: string, rideId: number): Promise<Ride> 
 };
 
 // Cancel a ride (admin)
-export const adminCancelRide = async (token: string, rideId: number): Promise<{ message: string }> => {
+export const adminCancelRide = async (token: string, rideId: number): Promise<{ 
+  message: string;
+  refunds_processed: number;
+}> => {
   const response = await fetch(`${API_BASE_URL}/admin/rides/cancel`, {
     method: 'POST',
     headers: getHeaders(token),
     body: JSON.stringify({ rideId }),
   });
-  return handleResponse<{ message: string }>(response);
+  return handleResponse<{ message: string; refunds_processed: number }>(response);
 };
 
 // Get ride statistics
@@ -295,7 +254,7 @@ export const getDashboardStats = async (token: string): Promise<Stats> => {
 };
 
 //
-// 📋 REPORTS MANAGEMENT (ADMIN)
+// 📋 REPORTS MANAGEMENT (ADMIN) - ALREADY CORRECT
 //
 
 export const getReports = async (
@@ -327,12 +286,12 @@ export const getReportById = async (token: string, reportId: number): Promise<Re
   return handleResponse<Report>(response);
 };
 
-export const resolveReport = async (token: string, reportId: number): Promise<Report> => {
+export const resolveReport = async (token: string, reportId: number): Promise<{ message: string; report: Report }> => {
   const response = await fetch(`${API_BASE_URL}/admin/reports/${reportId}/resolve`, {
     method: 'POST',
     headers: getHeaders(token),
   });
-  return handleResponse<Report>(response);
+  return handleResponse<{ message: string; report: Report }>(response);
 };
 
 export const deleteReport = async (token: string, reportId: number): Promise<{ message: string }> => {
@@ -344,7 +303,7 @@ export const deleteReport = async (token: string, reportId: number): Promise<{ m
 };
 
 //
-// 💵 PAYMENTS MANAGEMENT (ADMIN)
+// 💵 PAYMENTS MANAGEMENT (ADMIN) - ALREADY CORRECT
 //
 
 export const getPayments = async (
@@ -387,7 +346,11 @@ export const releasePayment = async (token: string, rideId: number): Promise<{ m
   return handleResponse<{ message: string }>(response);
 };
 
-export const refundPayment = async (token: string, paymentId: number): Promise<{ message: string; refund_amount: number; payment_reference: string }> => {
+export const refundPayment = async (token: string, paymentId: number): Promise<{ 
+  message: string; 
+  refund_amount: number; 
+  payment_reference: string 
+}> => {
   const response = await fetch(`${API_BASE_URL}/admin/payments/${paymentId}/refund`, {
     method: 'POST',
     headers: getHeaders(token),
@@ -430,7 +393,7 @@ export const getPaymentStatistics = async (
 };
 
 //
-// ⚙️ SYSTEM CONFIG & HEALTH (ADMIN)
+// ⚙️ SYSTEM CONFIG & HEALTH (ADMIN) - ALREADY CORRECT
 //
 
 export const getConfig = async (token: string): Promise<Config> => {
@@ -472,30 +435,4 @@ export const handleApiError = (error: unknown): string => {
     return error.message;
   }
   return 'An unexpected error occurred';
-};
-
-// API client with interceptors
-export const createApiClient = (token: string) => {
-  const baseHeaders = getHeaders(token);
-
-  return {
-    get: <T>(url: string) => fetch(`${API_BASE_URL}${url}`, { headers: baseHeaders }).then(handleResponse<T>),
-    post: <T>(url: string, data?: any) => 
-      fetch(`${API_BASE_URL}${url}`, { 
-        method: 'POST', 
-        headers: baseHeaders, 
-        body: data ? JSON.stringify(data) : undefined 
-      }).then(handleResponse<T>),
-    put: <T>(url: string, data?: any) => 
-      fetch(`${API_BASE_URL}${url}`, { 
-        method: 'PUT', 
-        headers: baseHeaders, 
-        body: data ? JSON.stringify(data) : undefined 
-      }).then(handleResponse<T>),
-    delete: <T>(url: string) => 
-      fetch(`${API_BASE_URL}${url}`, { 
-        method: 'DELETE', 
-        headers: baseHeaders 
-      }).then(handleResponse<T>),
-  };
 };
