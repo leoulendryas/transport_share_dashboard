@@ -1,202 +1,163 @@
 'use client';
 
-import { useState } from 'react';
+import { Payment } from '@/types/user';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { DollarSign, Calendar, User, Car, Check, Clock, Filter, Download } from 'lucide-react';
+import { DollarSign, Check, Clock, Download, AlertCircle, ArrowRight } from 'lucide-react';
 
 interface PaymentsPageProps {
+  payments: Payment[];
+  total: number;
+  currentPage: number;
+  filter: string;
+  onFilterChange: (filter: any) => void;
+  onRelease: (rideId: number) => void;
+  onPageChange: (page: number) => void;
   loading?: boolean;
 }
 
-// Mock data - replace with actual API calls
-const mockPayments = [
-  {
-    id: 1,
-    rideId: 123,
-    driver: { name: 'John Doe', email: 'john@example.com' },
-    amount: 450.00,
-    status: 'completed',
-    createdAt: '2024-01-15T10:30:00Z',
-    ride: { from: 'Addis Ababa', to: 'Dire Dawa' }
-  },
-  {
-    id: 2,
-    rideId: 124,
-    driver: { name: 'Jane Smith', email: 'jane@example.com' },
-    amount: 320.50,
-    status: 'pending',
-    createdAt: '2024-01-14T14:20:00Z',
-    ride: { from: 'Addis Ababa', to: 'Bahir Dar' }
-  }
-];
+const ITEMS_PER_PAGE = 10;
 
-export default function PaymentsPage({ loading = false }: PaymentsPageProps) {
-  const [payments] = useState(mockPayments);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+export default function PaymentsPage({
+  payments,
+  total,
+  currentPage,
+  filter,
+  onFilterChange,
+  onRelease,
+  onPageChange,
+  loading = false
+}: PaymentsPageProps) {
+  
+  const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
-  const filteredPayments = payments.filter(payment => 
-    filter === 'all' || payment.status === filter
-  );
-
-  const totalAmount = filteredPayments.reduce((sum, payment) => sum + payment.amount, 0);
-  const completedAmount = filteredPayments
-    .filter(p => p.status === 'completed')
-    .reduce((sum, p) => sum + p.amount, 0);
+  // Derived stats based on the data passed in
+  const totalVolume = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const completedVolume = payments
+    .filter(p => p.status === 'completed' || p.status === 'released_to_driver')
+    .reduce((sum, p) => sum + Number(p.amount), 0);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
+      <div className="flex flex-col justify-center items-center py-24">
         <LoadingSpinner size="lg" />
-        <span className="ml-2 text-gray-600">Loading payments...</span>
+        <span className="mt-4 text-gray-600 font-medium">Updating transaction records...</span>
       </div>
     );
   }
 
   return (
     <div className="p-6">
+      {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Payments Management</h2>
-          <p className="text-gray-600">Monitor and manage ride payments</p>
+          <p className="text-gray-600">Track and authorize driver payouts</p>
         </div>
         <div className="flex items-center gap-4">
           <select
             value={filter}
-            onChange={(e) => setFilter(e.target.value as any)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            onChange={(e) => onFilterChange(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
           >
-            <option value="all">All Payments</option>
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
+            <option value="all">All Transactions</option>
+            <option value="pending">Pending (Escrow)</option>
+            <option value="completed">Completed (Paid)</option>
+            <option value="released_to_driver">Released to Driver</option>
           </select>
-          <button className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+          <button className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-shadow">
             <Download className="h-4 w-4 mr-2" />
             Export
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
+      {/* Financial Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <DollarSign className="h-8 w-8 text-blue-600" />
-            </div>
+            <div className="p-3 bg-blue-50 rounded-lg"><DollarSign className="h-6 w-6 text-blue-600" /></div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Amount</p>
-              <p className="text-2xl font-semibold text-gray-900">ETB {totalAmount.toFixed(2)}</p>
+              <p className="text-xs font-bold text-gray-500 uppercase">Filtered Volume</p>
+              <p className="text-2xl font-bold text-gray-900">ETB {totalVolume.toLocaleString()}</p>
             </div>
           </div>
         </div>
-        
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
+
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <Check className="h-8 w-8 text-green-600" />
-            </div>
+            <div className="p-3 bg-green-50 rounded-lg"><Check className="h-6 w-6 text-green-600" /></div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Completed</p>
-              <p className="text-2xl font-semibold text-gray-900">ETB {completedAmount.toFixed(2)}</p>
+              <p className="text-xs font-bold text-gray-500 uppercase">Settled</p>
+              <p className="text-2xl font-bold text-gray-900">ETB {completedVolume.toLocaleString()}</p>
             </div>
           </div>
         </div>
-        
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
+
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <Clock className="h-8 w-8 text-yellow-600" />
-            </div>
+            <div className="p-3 bg-yellow-50 rounded-lg"><Clock className="h-6 w-6 text-yellow-600" /></div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Pending</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                ETB {(totalAmount - completedAmount).toFixed(2)}
-              </p>
+              <p className="text-xs font-bold text-gray-500 uppercase">In Escrow</p>
+              <p className="text-2xl font-bold text-gray-900">ETB {(totalVolume - completedVolume).toLocaleString()}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {filteredPayments.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <DollarSign className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No payments found</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {filter !== 'all' ? `No ${filter} payments at the moment.` : 'No payments in the system.'}
-          </p>
+      {/* Table Section */}
+      {payments.length === 0 ? (
+        <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+          <AlertCircle className="mx-auto h-12 w-12 text-gray-300" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No payment records found</h3>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Driver
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ride
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Reference</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Ride ID</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Created At</th>
+                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase">Action</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPayments.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">#{payment.id}</div>
-                      <div className="text-sm text-gray-500">Ride #{payment.rideId}</div>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {payments.map((payment) => (
+                  <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 uppercase">
+                      #{payment.payment_reference || payment.id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      Ride #{payment.ride_id}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
+                      ETB {Number(payment.amount).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{payment.driver.name}</div>
-                      <div className="text-sm text-gray-500">{payment.driver.email}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {payment.ride.from} → {payment.ride.to}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        ETB {payment.amount.toFixed(2)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        payment.status === 'completed' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        payment.status === 'completed' ? 'bg-green-100 text-green-700' :
+                        payment.status === 'released_to_driver' ? 'bg-blue-100 text-blue-700' :
+                        payment.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
                       }`}>
-                        {payment.status === 'completed' ? 'Completed' : 'Pending'}
+                        {payment.status.replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(payment.createdAt).toLocaleDateString()}
+                      {new Date(payment.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {payment.status === 'pending' && (
-                        <button className="text-blue-600 hover:text-blue-900">
-                          Release Payment
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      {payment.status === 'completed' ? (
+                        <button
+                          onClick={() => onRelease(payment.ride_id)}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          Release Payout
                         </button>
-                      )}
-                      {payment.status === 'completed' && (
-                        <button className="text-gray-600 hover:text-gray-900">
-                          View Details
-                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">No Action</span>
                       )}
                     </td>
                   </tr>
@@ -204,6 +165,29 @@ export default function PaymentsPage({ loading = false }: PaymentsPageProps) {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => onPageChange(currentPage - 1)}
+                className="text-sm font-medium text-gray-600 disabled:opacity-30"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-gray-500 font-bold uppercase">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => onPageChange(currentPage + 1)}
+                className="text-sm font-medium text-gray-600 disabled:opacity-30"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
