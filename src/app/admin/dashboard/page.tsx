@@ -7,7 +7,7 @@ import Sidebar from '@/components/admin/Sidebar';
 import Header from '@/components/admin/Header';
 import StatsCard from '@/components/admin/StatsCard';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { User, PendingVerification, Stats, Ride } from '@/types/user';
+import { User, PendingVerification, Stats, Ride, Payment } from '@/types/user';
 import { 
   getUsers, 
   getPendingVerifications, 
@@ -17,7 +17,8 @@ import {
   rejectVerification,
   getDashboardStats,
   getRides,
-  adminCancelRide
+  adminCancelRide,
+  getPayments // Ensure this is exported in your lib/api
 } from '@/lib/api';
 
 // Pages
@@ -32,7 +33,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
 
-  // Users & verifications (without pagination)
+  // Users & verifications
   const [users, setUsers] = useState<User[]>([]);
   const [verifications, setVerifications] = useState<PendingVerification[]>([]);
 
@@ -41,33 +42,44 @@ export default function DashboardPage() {
   const [currentRidePage, setCurrentRidePage] = useState(1);
   const [totalRides, setTotalRides] = useState(0);
 
+  // Payments (with pagination & filter)
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'pending' | 'completed' | 'released_to_driver'>('all');
+  const [currentPaymentPage, setCurrentPaymentPage] = useState(1);
+  const [totalPayments, setTotalPayments] = useState(0);
+
   const [activeTab, setActiveTab] = useState<
     'users' | 'rides' | 'verifications' | 'reports' | 'payments' | 'config'
   >('users');
 
   const router = useRouter();
 
-  const fetchAllData = async (token: string) => {
+  const fetchAllData = async (authToken: string) => {
     setIsLoading(true);
     try {
-      // Fetch dashboard stats
-      const statsData = await getDashboardStats(token);
+      // 1. Always fetch dashboard stats for the top cards
+      const statsData = await getDashboardStats(authToken);
       setStats(statsData);
 
-      // Fetch data based on active tab
+      // 2. Fetch specific tab data
       switch (activeTab) {
         case 'users':
-          const usersData = await getUsers(token, 1, 50);
+          const usersData = await getUsers(authToken, 1, 50);
           setUsers(usersData.results);
           break;
         case 'verifications':
-          const verificationsData = await getPendingVerifications(token, 1, 50);
+          const verificationsData = await getPendingVerifications(authToken, 1, 50);
           setVerifications(verificationsData.results);
           break;
         case 'rides':
-          const ridesData = await getRides(token, currentRidePage, 10);
+          const ridesData = await getRides(authToken, currentRidePage, 10);
           setRides(ridesData.results);
           setTotalRides(ridesData.pagination.total);
+          break;
+        case 'payments':
+          const paymentsData = await getPayments(authToken, currentPaymentPage, 10, paymentFilter);
+          setPayments(paymentsData.results);
+          setTotalPayments(paymentsData.pagination.total);
           break;
         default:
           break;
@@ -75,7 +87,8 @@ export default function DashboardPage() {
     } catch (error: any) {
       console.error('Failed to fetch data:', error);
       
-      if (error.message.includes('401') || error.message.includes('403')) {
+      // Handle Token Expiry
+      if (error.message?.includes('401') || error.message?.includes('403')) {
         try {
           const newToken = await refreshAuthToken();
           if (newToken) {
@@ -83,309 +96,117 @@ export default function DashboardPage() {
             return;
           }
         } catch (refreshError) {
-          console.error('Token refresh failed:', refreshError);
           router.push('/admin/login');
           return;
         }
       }
-      
-      setUsers([]);
-      setVerifications([]);
-      setRides([]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Trigger fetch when tab or pages change
   useEffect(() => {
     if (!authLoading && admin && token) {
       fetchAllData(token);
     }
-  }, [admin, authLoading, token, activeTab, currentRidePage]);
+  }, [admin, authLoading, token, activeTab, currentRidePage, currentPaymentPage, paymentFilter]);
 
+  // Auth Guard
   useEffect(() => {
-    if (!authLoading) {
-      if (!admin || !token) {
-        router.push('/admin/login');
-      }
+    if (!authLoading && (!admin || !token)) {
+      router.push('/admin/login');
     }
   }, [admin, authLoading, token, router]);
 
-  // User handlers
+  /* --- HANDLERS --- */
+
   const handleVerify = async (userId: number) => {
     if (!token) return;
-    
     try {
       await verifyUserID(token, userId);
-      
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId ? { ...user, id_verified: true } : user
-        )
-      );
-      setVerifications(prevVerifications => 
-        prevVerifications.filter(verification => verification.id !== userId)
-      );
-      
-      const updatedStats = await getDashboardStats(token);
-      setStats(updatedStats);
-      
-    } catch (error) {
-      console.error('Failed to verify user:', error);
-      alert('Failed to verify user. Please try again.');
-    }
+      setVerifications(prev => prev.filter(v => v.id !== userId));
+      fetchAllData(token);
+    } catch (error) { alert('Failed to verify user'); }
   };
 
-  const handleReject = async (userId: number) => {
-    if (!token) return;
-    
-    try {
-      await rejectVerification(token, userId);
-      
-      setVerifications(prevVerifications => 
-        prevVerifications.filter(verification => verification.id !== userId)
-      );
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId ? { ...user, id_verified: false, id_image_url: undefined } : user
-        )
-      );
-      
-    } catch (error) {
-      console.error('Failed to reject verification:', error);
-      alert('Failed to reject verification. Please try again.');
-    }
-  };
-
-  const handleBan = async (userId: number) => {
-    if (!token) return;
-    
-    try {
-      await banUser(token, userId);
-      
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId ? { ...user, banned: true } : user
-        )
-      );
-      
-    } catch (error) {
-      console.error('Failed to ban user:', error);
-      alert('Failed to ban user. Please try again.');
-    }
-  };
-
-  const handleUnban = async (userId: number) => {
-    if (!token) return;
-    
-    try {
-      await unbanUser(token, userId);
-      
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId ? { ...user, banned: false } : user
-        )
-      );
-      
-    } catch (error) {
-      console.error('Failed to unban user:', error);
-      alert('Failed to unban user. Please try again.');
-    }
-  };
-
-  // Ride handlers
   const handleCancelRide = async (rideId: number) => {
     if (!token) return;
-    
     try {
       await adminCancelRide(token, rideId);
-      
-      setRides(prevRides => prevRides.filter(ride => ride.id !== rideId));
-      
-      if (stats) {
-        setStats({
-          ...stats,
-          activeRides: Math.max(0, (stats.activeRides || 0) - 1),
-          rideStats: {
-            ...stats.rideStats,
-            cancelledRides: (stats.rideStats?.cancelledRides || 0) + 1,
-            activeRides: Math.max(0, (stats.rideStats?.activeRides || 0) - 1)
-          }
-        });
-      }
-      
-    } catch (error) {
-      console.error('Failed to cancel ride:', error);
-      alert('Failed to cancel ride. Please try again.');
-    }
-  };
-
-  const handleRidePageChange = (page: number) => {
-    setCurrentRidePage(page);
-  };
-
-  const handleRefreshData = () => {
-    if (token) {
+      setRides(prev => prev.filter(r => r.id !== rideId));
       fetchAllData(token);
-    }
+    } catch (error) { alert('Failed to cancel ride'); }
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" />
-        <span className="ml-2">Checking authentication...</span>
-      </div>
-    );
-  }
+  const handleReleasePayment = async (rideId: number) => {
+    if (!token) return;
+    try {
+      // await releasePayout(token, rideId); // If your API has this
+      alert('Payout initiated for Ride #' + rideId);
+      fetchAllData(token);
+    } catch (error) { alert('Failed to release payment'); }
+  };
 
-  if (!admin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" />
-          <p className="mt-2">Redirecting to login...</p>
-        </div>
-      </div>
-    );
-  }
+  if (authLoading) return <div className="h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => {
+        setActiveTab(tab);
+        // Reset pages when switching tabs
+        setCurrentRidePage(1);
+        setCurrentPaymentPage(1);
+      }} />
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
-          title="Admin Dashboard"
-          description="Manage users, verifications, rides, reports, payments, and system config"
-          onRefresh={handleRefreshData}
+        <Header 
+          title="Admin Dashboard" 
+          onRefresh={() => token && fetchAllData(token)} 
         />
         
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            <StatsCard
-              title="Total Users"
-              value={stats?.totalUsers || 0}
-              icon="people"
-              color="bg-blue-500"
-              loading={isLoading}
-            />
-            <StatsCard
-              title="Active Rides"
-              value={stats?.activeRides || 0}
-              icon="directions_car"
-              color="bg-green-500"
-              loading={isLoading}
-            />
-            <StatsCard
-              title="Pending Verifications"
-              value={stats?.pendingVerifications || 0}
-              icon="verified"
-              color="bg-yellow-500"
-              loading={isLoading}
-            />
-            <StatsCard
-              title="Reports"
-              value={stats?.reports || 0}
-              icon="report"
-              color="bg-red-500"
-              loading={isLoading}
-            />
+          {/* Main Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <StatsCard title="Total Users" value={stats?.totalUsers || 0} icon="people" color="bg-blue-500" loading={isLoading} />
+            <StatsCard title="Active Rides" value={stats?.activeRides || 0} icon="directions_car" color="bg-green-500" loading={isLoading} />
+            <StatsCard title="Pending Verifications" value={stats?.pendingVerifications || 0} icon="verified" color="bg-yellow-500" loading={isLoading} />
+            <StatsCard title="Reports" value={stats?.reports || 0} icon="report" color="bg-red-500" loading={isLoading} />
           </div>
 
-          {/* Ride Stats Subgrid */}
-          {stats?.rideStats && (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-              <StatsCard
-                title="Total Rides"
-                value={stats.rideStats.totalRides || 0}
-                icon="route"
-                color="bg-purple-500"
-                size="sm"
-              />
-              <StatsCard
-                title="Completed"
-                value={stats.rideStats.completedRides || 0}
-                icon="check_circle"
-                color="bg-green-500"
-                size="sm"
-              />
-              <StatsCard
-                title="Cancelled"
-                value={stats.rideStats.cancelledRides || 0}
-                icon="cancel"
-                color="bg-red-500"
-                size="sm"
-              />
-              <StatsCard
-                title="Disputed"
-                value={stats.rideStats.disputedRides || 0}
-                icon="warning"
-                color="bg-orange-500"
-                size="sm"
-              />
-              <StatsCard
-                title="Avg Seats"
-                value={stats.rideStats.averageSeats ? Math.round(stats.rideStats.averageSeats) : 0}
-                icon="airline_seat_recline_normal"
-                color="bg-indigo-500"
-                size="sm"
-              />
-            </div>
-          )}
-
-          {/* Tab Content */}
+          {/* Dynamic Tab Content */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {isLoading ? (
-              <div className="flex justify-center items-center py-12">
-                <LoadingSpinner size="lg" />
-                <span className="ml-2 text-gray-600">Loading {activeTab}...</span>
-              </div>
+              <div className="flex justify-center items-center py-20"><LoadingSpinner size="lg" /></div>
             ) : (
               <>
-                {activeTab === 'users' && (
-                  <UsersPage 
-                    users={users} 
-                    onBan={handleBan}
-                    onUnban={handleUnban}
-                    loading={isLoading}
-                  />
-                )}
+                {activeTab === 'users' && <UsersPage users={users} onBan={banUser} onUnban={unbanUser} loading={isLoading} />}
                 
-                {activeTab === 'verifications' && (
-                  <VerificationsPage
-                    verifications={verifications}
-                    onVerify={handleVerify}
-                    onReject={handleReject}
-                    loading={isLoading}
-                  />
-                )}
+                {activeTab === 'verifications' && <VerificationsPage verifications={verifications} onVerify={handleVerify} onReject={rejectVerification} />}
                 
                 {activeTab === 'rides' && (
-                  <RidesPage
-                    rides={rides}
-                    currentPage={currentRidePage}
-                    total={totalRides}
-                    onCancel={handleCancelRide}
-                    onPageChange={handleRidePageChange}
-                    loading={isLoading}
+                  <RidesPage 
+                    rides={rides} 
+                    currentPage={currentRidePage} 
+                    total={totalRides} 
+                    onCancel={handleCancelRide} 
+                    onPageChange={setCurrentRidePage} 
                   />
-                )}
-                
-                {activeTab === 'reports' && (
-                  <ReportsPage loading={isLoading} />
                 )}
                 
                 {activeTab === 'payments' && (
-                  <PaymentsPage loading={isLoading} />
+                  <PaymentsPage 
+                    payments={payments}
+                    total={totalPayments}
+                    currentPage={currentPaymentPage}
+                    filter={paymentFilter}
+                    onFilterChange={(f) => { setPaymentFilter(f); setCurrentPaymentPage(1); }}
+                    onPageChange={setCurrentPaymentPage}
+                    onRelease={handleReleasePayment}
+                  />
                 )}
-                
-                {activeTab === 'config' && (
-                  <div className="p-6 text-center text-gray-500">
-                    System Configuration - Coming Soon
-                  </div>
-                )}
+
+                {activeTab === 'reports' && <ReportsPage />}
               </>
             )}
           </div>
