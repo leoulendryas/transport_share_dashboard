@@ -18,7 +18,7 @@ import {
   getDashboardStats,
   getRides,
   adminCancelRide,
-  getPayments // Ensure this is exported in your lib/api
+  getPayments 
 } from '@/lib/api';
 
 // Pages
@@ -57,11 +57,9 @@ export default function DashboardPage() {
   const fetchAllData = async (authToken: string) => {
     setIsLoading(true);
     try {
-      // 1. Always fetch dashboard stats for the top cards
       const statsData = await getDashboardStats(authToken);
       setStats(statsData);
 
-      // 2. Fetch specific tab data
       switch (activeTab) {
         case 'users':
           const usersData = await getUsers(authToken, 1, 50);
@@ -86,8 +84,6 @@ export default function DashboardPage() {
       }
     } catch (error: any) {
       console.error('Failed to fetch data:', error);
-      
-      // Handle Token Expiry
       if (error.message?.includes('401') || error.message?.includes('403')) {
         try {
           const newToken = await refreshAuthToken();
@@ -105,21 +101,19 @@ export default function DashboardPage() {
     }
   };
 
-  // Trigger fetch when tab or pages change
   useEffect(() => {
     if (!authLoading && admin && token) {
       fetchAllData(token);
     }
   }, [admin, authLoading, token, activeTab, currentRidePage, currentPaymentPage, paymentFilter]);
 
-  // Auth Guard
   useEffect(() => {
     if (!authLoading && (!admin || !token)) {
       router.push('/admin/login');
     }
   }, [admin, authLoading, token, router]);
 
-  /* --- HANDLERS --- */
+  /* --- HANDLERS (Wrappers to inject token) --- */
 
   const handleVerify = async (userId: number) => {
     if (!token) return;
@@ -130,11 +124,35 @@ export default function DashboardPage() {
     } catch (error) { alert('Failed to verify user'); }
   };
 
+  const handleReject = async (userId: number) => {
+    if (!token) return;
+    try {
+      await rejectVerification(token, userId);
+      setVerifications(prev => prev.filter(v => v.id !== userId));
+      fetchAllData(token);
+    } catch (error) { alert('Failed to reject verification'); }
+  };
+
+  const handleBan = async (userId: number) => {
+    if (!token) return;
+    try {
+      await banUser(token, userId);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, banned: true } : u));
+    } catch (error) { alert('Failed to ban user'); }
+  };
+
+  const handleUnban = async (userId: number) => {
+    if (!token) return;
+    try {
+      await unbanUser(token, userId);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, banned: false } : u));
+    } catch (error) { alert('Failed to unban user'); }
+  };
+
   const handleCancelRide = async (rideId: number) => {
     if (!token) return;
     try {
       await adminCancelRide(token, rideId);
-      setRides(prev => prev.filter(r => r.id !== rideId));
       fetchAllData(token);
     } catch (error) { alert('Failed to cancel ride'); }
   };
@@ -142,7 +160,7 @@ export default function DashboardPage() {
   const handleReleasePayment = async (rideId: number) => {
     if (!token) return;
     try {
-      // await releasePayout(token, rideId); // If your API has this
+      // await releasePayout(token, rideId); 
       alert('Payout initiated for Ride #' + rideId);
       fetchAllData(token);
     } catch (error) { alert('Failed to release payment'); }
@@ -154,7 +172,6 @@ export default function DashboardPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar activeTab={activeTab} onTabChange={(tab) => {
         setActiveTab(tab);
-        // Reset pages when switching tabs
         setCurrentRidePage(1);
         setCurrentPaymentPage(1);
       }} />
@@ -167,7 +184,6 @@ export default function DashboardPage() {
         />
         
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Main Stats */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             <StatsCard title="Total Users" value={stats?.totalUsers || 0} icon="people" color="bg-blue-500" loading={isLoading} />
             <StatsCard title="Active Rides" value={stats?.activeRides || 0} icon="directions_car" color="bg-green-500" loading={isLoading} />
@@ -175,15 +191,27 @@ export default function DashboardPage() {
             <StatsCard title="Reports" value={stats?.reports || 0} icon="report" color="bg-red-500" loading={isLoading} />
           </div>
 
-          {/* Dynamic Tab Content */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {isLoading ? (
               <div className="flex justify-center items-center py-20"><LoadingSpinner size="lg" /></div>
             ) : (
               <>
-                {activeTab === 'users' && <UsersPage users={users} onBan={banUser} onUnban={unbanUser} loading={isLoading} />}
+                {activeTab === 'users' && (
+                  <UsersPage 
+                    users={users} 
+                    onBan={handleBan} 
+                    onUnban={handleUnban} 
+                    loading={isLoading} 
+                  />
+                )}
                 
-                {activeTab === 'verifications' && <VerificationsPage verifications={verifications} onVerify={handleVerify} onReject={rejectVerification} />}
+                {activeTab === 'verifications' && (
+                  <VerificationsPage 
+                    verifications={verifications} 
+                    onVerify={handleVerify} 
+                    onReject={handleReject} 
+                  />
+                )}
                 
                 {activeTab === 'rides' && (
                   <RidesPage 
