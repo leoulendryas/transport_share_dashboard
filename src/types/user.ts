@@ -111,6 +111,7 @@ export interface Report {
   status?: 'pending' | 'resolved';
 }
 
+// FIXED: Added payment_reference to satisfy PaymentsPage.tsx
 export type Payment = {
   id: number;
   ride_id: number;
@@ -119,6 +120,7 @@ export type Payment = {
   amount: number;
   status: string;
   created_at: string;
+  payment_reference?: string; // Added this line
   from_address?: string;
   to_address?: string;
 };
