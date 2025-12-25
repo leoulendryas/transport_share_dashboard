@@ -162,6 +162,7 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
           title="Admin Dashboard" 
+          description="Manage users, verifications, rides, reports, payments, and system config"
           onRefresh={() => token && fetchAllData(token)} 
         />
         
