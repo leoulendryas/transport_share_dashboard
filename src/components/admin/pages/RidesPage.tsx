@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Ride } from '@/types/user';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Car, MapPin, Calendar, Users, DollarSign, X as Cancel, Eye, MoreHorizontal, ChevronRight, Clock, Shield } from 'lucide-react';
+import { Car, MapPin, Calendar, Users, DollarSign, X as Cancel, Eye, MoreHorizontal, ChevronRight, Clock, Shield, MessageSquare, User as UserIcon } from 'lucide-react';
+import { getRideMessages } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 interface RidesPageProps {
   rides: Ride[];
@@ -24,7 +26,28 @@ export default function RidesPage({
   onPageChange, 
   loading = false 
 }: RidesPageProps) {
+  const { token } = useAuth();
   const [selectedRide, setSelectedRide] = useState<Ride | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+
+  useEffect(() => {
+    if (selectedRide && showChat && token) {
+      const fetchMessages = async () => {
+        setLoadingMessages(true);
+        try {
+          const data = await getRideMessages(token, selectedRide.id);
+          setMessages(data);
+        } catch (error) {
+          console.error('Failed to fetch messages');
+        } finally {
+          setLoadingMessages(false);
+        }
+      };
+      fetchMessages();
+    }
+  }, [selectedRide, showChat, token]);
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
   const statusColors = {
@@ -202,10 +225,10 @@ export default function RidesPage({
                 <Car className="w-6 h-6 text-blue-600" />
                 <h3 className="text-xl font-bold text-slate-900">Ride Review #{selectedRide.id}</h3>
               </div>
-              <button onClick={() => setSelectedRide(null)} className="w-10 h-10 rounded-full hover:bg-white flex items-center justify-center transition-colors">✕</button>
+              <button onClick={() => { setSelectedRide(null); setShowChat(false); }} className="w-10 h-10 rounded-full hover:bg-white flex items-center justify-center transition-colors">✕</button>
             </div>
             
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto max-h-[70vh]">
               <div className="space-y-6">
                 <div className="space-y-4">
                   <div className="space-y-1">
@@ -253,11 +276,49 @@ export default function RidesPage({
                   </div>
                 </div>
               </div>
+
+              <div className="md:col-span-2">
+                <button 
+                  onClick={() => setShowChat(!showChat)}
+                  className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm font-bold text-slate-700">Ride Conversation History</span>
+                  </div>
+                  <ChevronRight className={`w-5 h-5 text-slate-400 transition-transform ${showChat ? 'rotate-90' : ''}`} />
+                </button>
+
+                {showChat && (
+                  <div className="mt-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 space-y-3 max-h-60 overflow-y-auto">
+                    {loadingMessages ? (
+                      <div className="py-8 text-center"><LoadingSpinner size="sm" /></div>
+                    ) : messages.length === 0 ? (
+                      <div className="py-8 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No messages exchanged</div>
+                    ) : (
+                      messages.map((msg, i) => (
+                        <div key={i} className="flex gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex-shrink-0 flex items-center justify-center text-[10px] font-black text-blue-600 shadow-sm">
+                            {msg.first_name?.[0]}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-slate-900 uppercase">{msg.first_name} {msg.last_name}</span>
+                              <span className="text-[8px] font-bold text-slate-400 tracking-tighter">{new Date(msg.created_at).toLocaleTimeString()}</span>
+                            </div>
+                            <p className="text-sm text-slate-600 font-medium">{msg.message}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="p-8 pt-0">
                <button 
-                onClick={() => setSelectedRide(null)}
+                onClick={() => { setSelectedRide(null); setShowChat(false); }}
                 className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-900/20 hover:scale-[1.01] transition-all"
                >
                 Close Review

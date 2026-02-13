@@ -3,19 +3,44 @@
 import { useState } from 'react';
 import { User } from '@/types/user';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Ban, UserCheck, UserX, Search, Mail, Phone, Calendar, Shield, MoreVertical, Eye } from 'lucide-react';
+import { Ban, UserCheck, UserX, Search, Mail, Phone, Calendar, Shield, MoreVertical, Eye, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { toggleAdminStatus } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 interface UsersPageProps {
   users: User[];
   onBan: (userId: number) => Promise<void>;
   onUnban: (userId: number) => Promise<void>;
+  onRefresh?: () => void;
   loading?: boolean;
 }
 
-export default function UsersPage({ users, onBan, onUnban, loading = false }: UsersPageProps) {
+export default function UsersPage({ users, onBan, onUnban, onRefresh, loading = false }: UsersPageProps) {
+  const { token } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBanned, setFilterBanned] = useState<'all' | 'banned' | 'active'>('all');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isUpdatingAdmin, setIsUpdatingAdmin] = useState(false);
+
+  const handleToggleAdmin = async (user: User) => {
+    if (!token) return;
+    const confirmMsg = user.is_admin 
+      ? `Revoke admin privileges from ${user.first_name}?` 
+      : `Grant admin privileges to ${user.first_name}?`;
+      
+    if (window.confirm(confirmMsg)) {
+      setIsUpdatingAdmin(true);
+      try {
+        await toggleAdminStatus(token, user.id, !user.is_admin);
+        if (onRefresh) onRefresh();
+        setSelectedUser(prev => prev ? { ...prev, is_admin: !prev.is_admin } : null);
+      } catch (error) {
+        alert('Failed to update admin status');
+      } finally {
+        setIsUpdatingAdmin(false);
+      }
+    }
+  };
 
   const filteredUsers = users.filter(user => {
     const matchesSearch =
@@ -236,6 +261,37 @@ export default function UsersPage({ users, onBan, onUnban, loading = false }: Us
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gender / Age</p>
                   <p className="text-sm font-semibold text-slate-700">{selectedUser.gender || '?'}, {selectedUser.age || '?'}</p>
                 </div>
+              </div>
+
+              <div className="flex gap-3 mb-8">
+                <button
+                  disabled={isUpdatingAdmin}
+                  onClick={() => handleToggleAdmin(selectedUser)}
+                  className={`flex-1 py-3 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                    selectedUser.is_admin 
+                    ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                    : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                  }`}
+                >
+                  {selectedUser.is_admin ? <ShieldAlert className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                  {selectedUser.is_admin ? 'Revoke Admin' : 'Make Admin'}
+                </button>
+                
+                {selectedUser.banned ? (
+                  <button
+                    onClick={() => handleUnban(selectedUser)}
+                    className="flex-1 py-3 px-4 bg-emerald-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-emerald-900/20"
+                  >
+                    Unban User
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleBan(selectedUser)}
+                    className="flex-1 py-3 px-4 bg-rose-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-rose-900/20"
+                  >
+                    Ban User
+                  </button>
+                )}
               </div>
 
               {selectedUser.id_image_url && (

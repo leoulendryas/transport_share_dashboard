@@ -35,7 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   ];
 
   return (
-    <div className="h-full w-64 bg-slate-900 text-slate-300 flex flex-col shadow-xl">
+    <div className="h-full w-64 bg-slate-900 dark:bg-black text-slate-300 flex flex-col shadow-xl transition-colors">
       <div className="p-6">
         <div className="flex items-center gap-3 px-2">
           <div className="bg-blue-600 p-2 rounded-lg">
@@ -55,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
                 activeTab === item.key 
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
-                  : 'hover:bg-slate-800 hover:text-white'
+                  : 'hover:bg-slate-800 dark:hover:bg-slate-900 hover:text-white'
               }`}
             >
               <item.icon className={`w-5 h-5 ${activeTab === item.key ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
@@ -66,7 +66,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
       </div>
       
       {admin && (
-        <div className="p-4 m-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+        <div className="p-4 m-4 bg-slate-800/50 dark:bg-slate-900/50 rounded-xl border border-slate-700/50">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
               {admin.name?.charAt(0) || 'A'}
@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           </div>
           <button
             onClick={logout}
-            className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-slate-700 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-sm"
+            className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-slate-700 dark:bg-slate-800 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all duration-200 shadow-sm"
           >
             <LogOut className="w-4 h-4" />
             Logout

@@ -32,6 +32,7 @@ import PaymentsPage from '@/components/admin/pages/PaymentsPage';
 import SosAlertsPage from '@/components/admin/pages/SosAlertsPage';
 import CompaniesPage from '@/components/admin/pages/CompaniesPage';
 import ConfigPage from '@/components/admin/pages/ConfigPage';
+import DashboardCharts from '@/components/admin/DashboardCharts';
 
 import { 
   Users, 
@@ -197,7 +198,7 @@ export default function DashboardPage() {
   if (authLoading) return <div className="h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans antialiased text-slate-900">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 font-sans antialiased text-slate-900 dark:text-slate-100 transition-colors">
       <Sidebar activeTab={activeTab} onTabChange={(tab) => {
         setActiveTab(tab);
         setCurrentRidePage(1);
@@ -219,7 +220,9 @@ export default function DashboardPage() {
             <StatsCard title="Active Reports" value={stats?.reports?.toLocaleString() || 0} icon={AlertTriangle} color="bg-rose-500" loading={isLoading} change={2} />
           </div>
 
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
+          <DashboardCharts stats={stats} />
+
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden min-h-[500px] transition-colors">
             {isLoading ? (
               <div className="flex flex-col justify-center items-center h-[500px] gap-4">
                 <LoadingSpinner size="lg" />

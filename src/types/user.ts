@@ -63,6 +63,11 @@ export interface Stats {
   pendingVerifications: number;
   reports: number;
   rideStats: RideStats;
+  paymentStats: {
+    totalPayments: number;
+    successfulPayments: number;
+    totalRevenue: number;
+  };
 }
 
 // NEW: RideParticipant type
