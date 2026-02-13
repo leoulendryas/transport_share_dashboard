@@ -138,6 +138,16 @@ export const unbanUser = async (token: string, userId: number): Promise<{ messag
   return handleResponse<{ message: string; user: User }>(response);
 };
 
+// Toggle admin status
+export const toggleAdminStatus = async (token: string, userId: number, isAdmin: boolean): Promise<{ message: string }> => {
+  const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/toggle-admin`, {
+    method: 'POST',
+    headers: getHeaders(token),
+    body: JSON.stringify({ is_admin: isAdmin }),
+  });
+  return handleResponse<{ message: string }>(response);
+};
+
 //
 // 🆔 VERIFICATIONS MANAGEMENT - UPDATED TO MATCH BACKEND
 //
@@ -233,6 +243,64 @@ export const adminCancelRide = async (token: string, rideId: number): Promise<{
     body: JSON.stringify({ rideId }),
   });
   return handleResponse<{ message: string; refunds_processed: number }>(response);
+};
+
+// Get ride messages
+export const getRideMessages = async (token: string, rideId: number): Promise<any[]> => {
+  const response = await fetch(`${API_BASE_URL}/admin/rides/${rideId}/messages`, {
+    method: 'GET',
+    headers: getHeaders(token),
+  });
+  return handleResponse<any[]>(response);
+};
+
+//
+// 🆘 SOS ALERTS
+//
+
+export const getSosAlerts = async (
+  token: string,
+  page: number = 1,
+  limit: number = 10
+): Promise<any[]> => {
+  const url = new URL(`${API_BASE_URL}/admin/sos`);
+  url.searchParams.append('page', page.toString());
+  url.searchParams.append('limit', limit.toString());
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: getHeaders(token),
+  });
+  return handleResponse<any[]>(response);
+};
+
+//
+// 🏢 COMPANIES MANAGEMENT
+//
+
+export const getCompanies = async (token: string): Promise<any[]> => {
+  const response = await fetch(`${API_BASE_URL}/admin/companies`, {
+    method: 'GET',
+    headers: getHeaders(token),
+  });
+  return handleResponse<any[]>(response);
+};
+
+export const createCompany = async (token: string, name: string): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/admin/companies`, {
+    method: 'POST',
+    headers: getHeaders(token),
+    body: JSON.stringify({ name }),
+  });
+  return handleResponse<any>(response);
+};
+
+export const deleteCompany = async (token: string, id: number): Promise<{ message: string }> => {
+  const response = await fetch(`${API_BASE_URL}/admin/companies/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders(token),
+  });
+  return handleResponse<{ message: string }>(response);
 };
 
 // Get ride statistics

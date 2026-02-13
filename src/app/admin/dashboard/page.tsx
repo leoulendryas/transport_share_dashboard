@@ -18,7 +18,9 @@ import {
   getDashboardStats,
   getRides,
   adminCancelRide,
-  getPayments 
+  getPayments,
+  getSosAlerts,
+  getCompanies
 } from '@/lib/api';
 
 // Pages
@@ -27,6 +29,21 @@ import VerificationsPage from '@/components/admin/pages/VerificationsPage';
 import RidesPage from '@/components/admin/pages/RidesPage';
 import ReportsPage from '@/components/admin/pages/ReportsPage';
 import PaymentsPage from '@/components/admin/pages/PaymentsPage';
+import SosAlertsPage from '@/components/admin/pages/SosAlertsPage';
+import CompaniesPage from '@/components/admin/pages/CompaniesPage';
+
+import { 
+  Users, 
+  Car, 
+  ShieldCheck, 
+  AlertTriangle, 
+  CreditCard, 
+  Bell, 
+  Building2,
+  TrendingUp,
+  History,
+  Info
+} from 'lucide-react';
 
 export default function DashboardPage() {
   const { admin, token, loading: authLoading, refreshAuthToken } = useAuth();
@@ -36,6 +53,8 @@ export default function DashboardPage() {
   // Users & verifications
   const [users, setUsers] = useState<User[]>([]);
   const [verifications, setVerifications] = useState<PendingVerification[]>([]);
+  const [sosAlerts, setSosAlerts] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
 
   // Rides (with pagination)
   const [rides, setRides] = useState<Ride[]>([]);
@@ -49,7 +68,7 @@ export default function DashboardPage() {
   const [totalPayments, setTotalPayments] = useState(0);
 
   const [activeTab, setActiveTab] = useState<
-    'users' | 'rides' | 'verifications' | 'reports' | 'payments' | 'config'
+    'users' | 'rides' | 'verifications' | 'reports' | 'payments' | 'config' | 'sos' | 'companies'
   >('users');
 
   const router = useRouter();
@@ -78,6 +97,14 @@ export default function DashboardPage() {
           const paymentsData = await getPayments(authToken, currentPaymentPage, 10, paymentFilter);
           setPayments(paymentsData.results);
           setTotalPayments(paymentsData.pagination.total);
+          break;
+        case 'sos':
+          const sosData = await getSosAlerts(authToken, 1, 50);
+          setSosAlerts(sosData);
+          break;
+        case 'companies':
+          const companiesData = await getCompanies(authToken);
+          setCompanies(companiesData);
           break;
         default:
           break;
@@ -169,7 +196,7 @@ export default function DashboardPage() {
   if (authLoading) return <div className="h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-slate-50 font-sans antialiased text-slate-900">
       <Sidebar activeTab={activeTab} onTabChange={(tab) => {
         setActiveTab(tab);
         setCurrentRidePage(1);
@@ -178,24 +205,27 @@ export default function DashboardPage() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Admin Dashboard" 
-          description="Manage users, verifications, rides, reports, payments, and system config"
+          title={activeTab.charAt(0).toUpperCase() + activeTab.slice(1) + " Management"} 
+          description={`Oversee and manage your ${activeTab} data efficiently.`}
           onRefresh={() => token && fetchAllData(token)} 
         />
         
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <StatsCard title="Total Users" value={stats?.totalUsers || 0} icon="people" color="bg-blue-500" loading={isLoading} />
-            <StatsCard title="Active Rides" value={stats?.activeRides || 0} icon="directions_car" color="bg-green-500" loading={isLoading} />
-            <StatsCard title="Pending Verifications" value={stats?.pendingVerifications || 0} icon="verified" color="bg-yellow-500" loading={isLoading} />
-            <StatsCard title="Reports" value={stats?.reports || 0} icon="report" color="bg-red-500" loading={isLoading} />
+        <main className="flex-1 overflow-y-auto p-8 lg:p-10 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatsCard title="Total Users" value={stats?.totalUsers?.toLocaleString() || 0} icon={Users} color="bg-blue-600" loading={isLoading} change={12} />
+            <StatsCard title="Active Rides" value={stats?.activeRides?.toLocaleString() || 0} icon={Car} color="bg-indigo-600" loading={isLoading} change={-5} />
+            <StatsCard title="Pending Verifications" value={stats?.pendingVerifications?.toLocaleString() || 0} icon={ShieldCheck} color="bg-amber-500" loading={isLoading} />
+            <StatsCard title="Active Reports" value={stats?.reports?.toLocaleString() || 0} icon={AlertTriangle} color="bg-rose-500" loading={isLoading} change={2} />
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
             {isLoading ? (
-              <div className="flex justify-center items-center py-20"><LoadingSpinner size="lg" /></div>
+              <div className="flex flex-col justify-center items-center h-[500px] gap-4">
+                <LoadingSpinner size="lg" />
+                <p className="text-slate-400 font-medium animate-pulse">Fetching latest data...</p>
+              </div>
             ) : (
-              <>
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {activeTab === 'users' && (
                   <UsersPage 
                     users={users} 
@@ -236,10 +266,14 @@ export default function DashboardPage() {
                 )}
 
                 {activeTab === 'reports' && <ReportsPage />}
-              </>
+
+                {activeTab === 'sos' && <SosAlertsPage />}
+
+                {activeTab === 'companies' && <CompaniesPage />}
+              </div>
             )}
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );

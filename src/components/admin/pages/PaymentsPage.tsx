@@ -2,7 +2,7 @@
 
 import { Payment } from '@/types/user';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { DollarSign, Check, Clock, Download, AlertCircle, ArrowRight } from 'lucide-react';
+import { DollarSign, Check, Clock, Download, AlertCircle, ArrowRight, TrendingUp, CreditCard, ExternalLink, Wallet } from 'lucide-react';
 
 interface PaymentsPageProps {
   payments: Payment[];
@@ -30,7 +30,6 @@ export default function PaymentsPage({
   
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
-  // Derived stats based on the data passed in
   const totalVolume = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const completedVolume = payments
     .filter(p => p.status === 'completed' || p.status === 'released_to_driver')
@@ -38,158 +37,159 @@ export default function PaymentsPage({
 
   if (loading) {
     return (
-      <div className="flex flex-col justify-center items-center py-24">
+      <div className="flex flex-col justify-center items-center py-20 gap-4">
         <LoadingSpinner size="lg" />
-        <span className="mt-4 text-gray-600 font-medium">Updating transaction records...</span>
+        <p className="text-slate-400 font-medium animate-pulse">Syncing ledger...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Payments Management</h2>
-          <p className="text-gray-600">Track and authorize driver payouts</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <select
-            value={filter}
-            onChange={(e) => onFilterChange(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
-          >
-            <option value="all">All Transactions</option>
-            <option value="pending">Pending (Escrow)</option>
-            <option value="completed">Completed (Paid)</option>
-            <option value="released_to_driver">Released to Driver</option>
-          </select>
-          <button className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-shadow">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </button>
-        </div>
-      </div>
-
-      {/* Financial Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center">
-            <div className="p-3 bg-blue-50 rounded-lg"><DollarSign className="h-6 w-6 text-blue-600" /></div>
-            <div className="ml-4">
-              <p className="text-xs font-bold text-gray-500 uppercase">Filtered Volume</p>
-              <p className="text-2xl font-bold text-gray-900">ETB {totalVolume.toLocaleString()}</p>
+    <div className="flex flex-col h-full bg-slate-50/30">
+      <div className="p-8 space-y-8">
+        {/* Financial Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Volume</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{totalVolume.toLocaleString()} <span className="text-xs font-bold text-slate-400">ETB</span></p>
             </div>
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-50 rounded-full opacity-50 group-hover:scale-110 transition-transform" />
+          </div>
+
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 mb-4 group-hover:scale-110 transition-transform">
+                <Check className="w-6 h-6" />
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Settled Payouts</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{completedVolume.toLocaleString()} <span className="text-xs font-bold text-slate-400">ETB</span></p>
+            </div>
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-50 rounded-full opacity-50 group-hover:scale-110 transition-transform" />
+          </div>
+
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 mb-4 group-hover:scale-110 transition-transform">
+                <Clock className="w-6 h-6" />
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">In Escrow</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{(totalVolume - completedVolume).toLocaleString()} <span className="text-xs font-bold text-slate-400">ETB</span></p>
+            </div>
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-amber-50 rounded-full opacity-50 group-hover:scale-110 transition-transform" />
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center">
-            <div className="p-3 bg-green-50 rounded-lg"><Check className="h-6 w-6 text-green-600" /></div>
-            <div className="ml-4">
-              <p className="text-xs font-bold text-gray-500 uppercase">Settled</p>
-              <p className="text-2xl font-bold text-gray-900">ETB {completedVolume.toLocaleString()}</p>
+        <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-50 bg-slate-50/30 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+               <select
+                value={filter}
+                onChange={(e) => onFilterChange(e.target.value)}
+                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer shadow-sm"
+              >
+                <option value="all">All Transactions</option>
+                <option value="pending">Pending Escrow</option>
+                <option value="completed">Completed Paid</option>
+                <option value="released_to_driver">Released to Driver</option>
+              </select>
             </div>
+            <button className="flex items-center gap-2 px-6 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-lg shadow-slate-900/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+              <Download className="w-4 h-4" /> Export Ledger
+            </button>
           </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-          <div className="flex items-center">
-            <div className="p-3 bg-yellow-50 rounded-lg"><Clock className="h-6 w-6 text-yellow-600" /></div>
-            <div className="ml-4">
-              <p className="text-xs font-bold text-gray-500 uppercase">In Escrow</p>
-              <p className="text-2xl font-bold text-gray-900">ETB {(totalVolume - completedVolume).toLocaleString()}</p>
+          {payments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+              <AlertCircle className="w-16 h-16 mb-4 opacity-10" />
+              <p className="text-lg font-medium">No transactions found</p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Table Section */}
-      {payments.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
-          <AlertCircle className="mx-auto h-12 w-12 text-gray-300" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No payment records found</h3>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Reference</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Ride ID</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase">Created At</th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {payments.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 uppercase">
-                      #{payment.payment_reference || payment.id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      Ride #{payment.ride_id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600">
-                      ETB {Number(payment.amount).toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        payment.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        payment.status === 'released_to_driver' ? 'bg-blue-100 text-blue-700' :
-                        payment.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {payment.status.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(payment.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      {payment.status === 'completed' ? (
-                        <button
-                          onClick={() => onRelease(payment.ride_id)}
-                          className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
-                        >
-                          Release Payout
-                        </button>
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">No Action</span>
-                      )}
-                    </td>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-100">
+                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Transaction Ref</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Linked Ride</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Payout Amount</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {payments.map((payment) => (
+                    <tr key={payment.id} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="px-8 py-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                            <CreditCard className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-slate-900 uppercase">#{payment.payment_reference || payment.id}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{new Date(payment.created_at).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5 text-sm font-bold text-slate-600">
+                        Ride <span className="text-blue-600">#{payment.ride_id}</span>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="text-sm font-black text-slate-900">{Number(payment.amount).toLocaleString()} <span className="text-[10px] text-slate-400">ETB</span></p>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
+                          payment.status === 'completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                          payment.status === 'released_to_driver' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                          payment.status === 'failed' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                        }`}>
+                          {payment.status.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        {payment.status === 'completed' ? (
+                          <button
+                            onClick={() => onRelease(payment.ride_id)}
+                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.05] active:scale-[0.95]"
+                          >
+                            Release
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest italic">Settled</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          {/* Pagination Footer */}
           {totalPages > 1 && (
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <div className="px-8 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
               <button
                 disabled={currentPage === 1}
                 onClick={() => onPageChange(currentPage - 1)}
-                className="text-sm font-medium text-gray-600 disabled:opacity-30"
+                className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 disabled:opacity-30 transition-colors"
               >
                 Previous
               </button>
-              <span className="text-xs text-gray-500 font-bold uppercase">
-                Page {currentPage} of {totalPages}
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">
+                Page {currentPage} / {totalPages}
               </span>
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => onPageChange(currentPage + 1)}
-                className="text-sm font-medium text-gray-600 disabled:opacity-30"
+                className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 disabled:opacity-30 transition-colors"
               >
                 Next
               </button>
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

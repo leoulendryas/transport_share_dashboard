@@ -19,7 +19,12 @@ export default function AdminLayout({
   }, [admin, loading, router]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950">
+        <div className="w-16 h-16 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mb-4" />
+        <p className="text-slate-500 font-black uppercase tracking-[0.3em] text-[10px]">Authenticating</p>
+      </div>
+    );
   }
 
   return <>{children}</>;

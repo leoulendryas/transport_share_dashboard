@@ -1,233 +1,210 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Flag, User, Car, Calendar, Check, X, Eye, Filter } from 'lucide-react';
+import { Flag, User, Car, Calendar, Check, X, Eye, Filter, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { getReports, resolveReport, handleApiError } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { Report } from '@/types/user';
 
 interface ReportsPageProps {
   loading?: boolean;
 }
 
-// Mock data - replace with actual API calls
-const mockReports = [
-  {
-    id: 1,
-    reporter: { name: 'John Doe', email: 'john@example.com' },
-    reportedUser: { name: 'Jane Smith', email: 'jane@example.com' },
-    ride: { id: 123, from: 'Addis Ababa', to: 'Dire Dawa' },
-    reason: 'Inappropriate behavior',
-    description: 'User was making other passengers uncomfortable during the ride.',
-    status: 'pending',
-    createdAt: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: 2,
-    reporter: { name: 'Mike Johnson', email: 'mike@example.com' },
-    reportedUser: { name: 'Sarah Wilson', email: 'sarah@example.com' },
-    ride: { id: 124, from: 'Addis Ababa', to: 'Bahir Dar' },
-    reason: 'No-show',
-    description: 'Driver did not show up at the meeting point.',
-    status: 'resolved',
-    createdAt: '2024-01-14T14:20:00Z'
-  }
-];
-
-export default function ReportsPage({ loading = false }: ReportsPageProps) {
-  const [reports] = useState(mockReports);
+export default function ReportsPage({ loading: externalLoading = false }: ReportsPageProps) {
+  const { token } = useAuth();
+  const [reports, setReports] = useState<Report[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'resolved'>('all');
-  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
 
-  const filteredReports = reports.filter(report => 
-    filter === 'all' || report.status === filter
-  );
+  const fetchReports = async () => {
+    if (!token) return;
+    setIsLoading(true);
+    try {
+      const data = await getReports(token, 1, 50, filter === 'resolved');
+      setReports(data.results || []);
+    } catch (error) {
+      console.error(handleApiError(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  if (loading) {
+  useEffect(() => {
+    fetchReports();
+  }, [token, filter]);
+
+  const handleResolve = async (reportId: number) => {
+    if (!token) return;
+    setIsResolving(true);
+    try {
+      await resolveReport(token, reportId);
+      await fetchReports();
+      setSelectedReport(null);
+    } catch (error) {
+      alert(handleApiError(error));
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  if (isLoading || externalLoading) {
     return (
-      <div className="flex justify-center items-center py-12">
+      <div className="flex flex-col justify-center items-center py-20 gap-4">
         <LoadingSpinner size="lg" />
-        <span className="ml-2 text-gray-600">Loading reports...</span>
+        <p className="text-slate-400 font-medium animate-pulse">Scanning reports...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Reports Management</h2>
-          <p className="text-gray-600">Review and resolve user reports</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as any)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Reports</option>
-            <option value="pending">Pending</option>
-            <option value="resolved">Resolved</option>
-          </select>
-          <div className="text-sm text-gray-500">
-            {filteredReports.length} report{filteredReports.length !== 1 ? 's' : ''}
+    <div className="flex flex-col h-full bg-slate-50/30">
+      <div className="p-8 space-y-8">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as any)}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer shadow-sm"
+            >
+              <option value="all">All Incidents</option>
+              <option value="pending">Pending Review</option>
+              <option value="resolved">Resolved Cases</option>
+            </select>
+          </div>
+          <div className="px-4 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-xs font-black uppercase tracking-widest border border-rose-100">
+            {reports.length} Active Alerts
           </div>
         </div>
-      </div>
 
-      {filteredReports.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <Flag className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No reports found</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {filter !== 'all' ? `No ${filter} reports at the moment.` : 'No reports in the system.'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-6">
-          {filteredReports.map((report) => (
-            <div key={report.id} className="bg-white rounded-lg border border-gray-200 p-6">
-              <div className="flex flex-col lg:flex-row gap-6">
-                {/* Report Info */}
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Flag className={`h-6 w-6 ${
-                        report.status === 'pending' ? 'text-yellow-600' : 'text-green-600'
-                      }`} />
-                      <h3 className="text-lg font-semibold text-gray-900">Report #{report.id}</h3>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        report.status === 'pending' 
-                          ? 'bg-yellow-100 text-yellow-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {report.status === 'pending' ? 'PENDING' : 'RESOLVED'}
-                      </span>
+        {reports.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
+            <ShieldAlert className="w-16 h-16 mb-4 opacity-10" />
+            <p className="text-lg font-medium">Clear Skies!</p>
+            <p className="text-sm">No reports matching your criteria.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {reports.map((report) => (
+              <div 
+                key={report.id} 
+                className="bg-white rounded-[2rem] border border-slate-100 p-8 hover:shadow-xl hover:shadow-slate-200/50 transition-all group relative overflow-hidden"
+              >
+                <div className="flex justify-between items-start mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
+                      <AlertTriangle className="w-6 h-6" />
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {new Date(report.createdAt).toLocaleDateString()}
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 leading-tight">Case #{report.id}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{new Date(report.created_at).toLocaleDateString()}</p>
                     </div>
                   </div>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                    report.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                  }`}>
+                    {report.status}
+                  </span>
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <div className="text-sm font-medium text-gray-700">Reporter</div>
-                      <div className="text-sm text-gray-900">{report.reporter.name}</div>
-                      <div className="text-sm text-gray-500">{report.reporter.email}</div>
-                    </div>
-                    
-                    <div>
-                      <div className="text-sm font-medium text-gray-700">Reported User</div>
-                      <div className="text-sm text-gray-900">{report.reportedUser.name}</div>
-                      <div className="text-sm text-gray-500">{report.reportedUser.email}</div>
-                    </div>
-                    
-                    {report.ride && (
-                      <>
-                        <div>
-                          <div className="text-sm font-medium text-gray-700">Ride</div>
-                          <div className="text-sm text-gray-900">#{report.ride.id}</div>
-                          <div className="text-sm text-gray-500">
-                            {report.ride.from} → {report.ride.to}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    
-                    <div>
-                      <div className="text-sm font-medium text-gray-700">Reason</div>
-                      <div className="text-sm text-gray-900">{report.reason}</div>
-                    </div>
+                <div className="grid grid-cols-2 gap-6 mb-6 pb-6 border-b border-slate-50">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reporter</p>
+                    <p className="text-sm font-bold text-slate-700">{report.reporter_email || 'System'}</p>
                   </div>
-
-                  <div>
-                    <div className="text-sm font-medium text-gray-700">Description</div>
-                    <div className="text-sm text-gray-600 mt-1 p-3 bg-gray-50 rounded-lg">
-                      {report.description}
-                    </div>
+                  <div className="space-y-1 text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Accused</p>
+                    <p className="text-sm font-bold text-slate-700">{report.reported_email || 'Unknown'}</p>
                   </div>
                 </div>
 
-                {/* Actions */}
-                {report.status === 'pending' && (
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => setSelectedReport({ ...report, action: 'resolve' })}
-                      className="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      <Check className="h-4 w-4 mr-2" />
-                      Mark Resolved
-                    </button>
-                    
-                    <button
-                      onClick={() => setSelectedReport(report)}
-                      className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
-                    </button>
+                <div className="space-y-4 mb-8">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reason for Report</p>
+                    <p className="text-sm font-bold text-rose-600 italic">"{report.reason}"</p>
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-sm text-slate-600 leading-relaxed font-medium line-clamp-2">
+                      {report.description || 'No additional details provided by the reporter.'}
+                    </p>
+                  </div>
+                </div>
 
-      {/* Action Modal */}
-      {selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">
-              {selectedReport.action === 'resolve' ? 'Resolve Report' : 'Report Details'}
-            </h3>
-            
-            {selectedReport.action === 'resolve' ? (
-              <>
-                <p className="text-sm text-gray-600 mb-4">
-                  Are you sure you want to mark this report as resolved?
-                </p>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setSelectedReport(null)}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    onClick={() => setSelectedReport(report)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-white hover:bg-slate-50 text-slate-900 rounded-xl font-bold transition-all border border-slate-200"
                   >
-                    Cancel
+                    <Eye className="w-5 h-5" /> View Full Case
                   </button>
+                  {report.status === 'pending' && (
+                    <button
+                      onClick={() => handleResolve(report.id)}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20"
+                    >
+                      <Check className="w-5 h-5" /> Resolve
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Case Details Modal */}
+      {selectedReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-50 bg-rose-50/50 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <ShieldAlert className="w-6 h-6 text-rose-600" />
+                <h3 className="text-xl font-bold text-slate-900">Case Investigation</h3>
+              </div>
+              <button onClick={() => setSelectedReport(null)} className="w-10 h-10 rounded-full hover:bg-white flex items-center justify-center transition-colors">✕</button>
+            </div>
+            
+            <div className="p-8 space-y-8">
+              <div className="space-y-4">
+                 <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Full Incident Report</p>
+                  <p className="text-sm text-slate-600 leading-relaxed font-medium bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    {selectedReport.description}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Incident Date</p>
+                    <p className="text-sm font-bold text-slate-700">{new Date(selectedReport.created_at).toLocaleString()}</p>
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Status</p>
+                    <p className="text-sm font-bold text-rose-600 uppercase">{selectedReport.status}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 space-y-3">
+                {selectedReport.status === 'pending' && (
                   <button
-                    onClick={() => {
-                      // Handle resolve action
-                      setSelectedReport(null);
-                    }}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    disabled={isResolving}
+                    onClick={() => handleResolve(selectedReport.id)}
+                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-xl shadow-emerald-900/20 hover:scale-[1.01] transition-all disabled:opacity-50"
                   >
-                    Mark Resolved
+                    {isResolving ? 'Processing...' : 'Close & Resolve Case'}
                   </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <span className="font-medium">Reporter:</span> {selectedReport.reporter.name}
-                  </div>
-                  <div>
-                    <span className="font-medium">Reported User:</span> {selectedReport.reportedUser.name}
-                  </div>
-                  <div>
-                    <span className="font-medium">Reason:</span> {selectedReport.reason}
-                  </div>
-                  <div>
-                    <span className="font-medium">Description:</span>
-                    <p className="mt-1 p-2 bg-gray-50 rounded">{selectedReport.description}</p>
-                  </div>
-                </div>
-                <button
+                )}
+                <button 
                   onClick={() => setSelectedReport(null)}
-                  className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
                 >
-                  Close
+                  Return to Dashboard
                 </button>
-              </>
-            )}
+              </div>
+            </div>
           </div>
         </div>
       )}

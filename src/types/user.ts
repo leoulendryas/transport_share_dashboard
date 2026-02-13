@@ -104,8 +104,11 @@ export interface Report {
   id: number;
   reporter_id: number;
   reported_user_id: number;
+  reporter_email?: string;
+  reported_email?: string;
   ride_id?: number;
   reason: string;
+  description?: string;
   resolved: boolean;
   created_at: string;
   status?: 'pending' | 'resolved';

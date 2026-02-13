@@ -3,14 +3,7 @@
 import { useState } from 'react';
 import { Ride } from '@/types/user';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Car, MapPin, Calendar, Users, DollarSign, X as Cancel, Eye, MoreHorizontal } from 'lucide-react';
-
-interface RideParticipant {
-  first_name: string;
-  last_name: string;
-  email: string;
-  is_driver?: boolean; // fixed optional driver flag
-}
+import { Car, MapPin, Calendar, Users, DollarSign, X as Cancel, Eye, MoreHorizontal, ChevronRight, Clock, Shield } from 'lucide-react';
 
 interface RidesPageProps {
   rides: Ride[];
@@ -35,12 +28,12 @@ export default function RidesPage({
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
   const statusColors = {
-    active: 'bg-green-100 text-green-800',
-    full: 'bg-blue-100 text-blue-800',
-    ongoing: 'bg-yellow-100 text-yellow-800',
-    completed: 'bg-gray-100 text-gray-800',
-    cancelled: 'bg-red-100 text-red-800',
-    disputed: 'bg-orange-100 text-orange-800'
+    active: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    full: 'bg-blue-50 text-blue-600 border-blue-100',
+    ongoing: 'bg-amber-50 text-amber-600 border-amber-100',
+    completed: 'bg-slate-50 text-slate-600 border-slate-100',
+    cancelled: 'bg-rose-50 text-rose-600 border-rose-100',
+    disputed: 'bg-orange-50 text-orange-600 border-orange-100'
   };
 
   const handleCancel = (rideId: number) => {
@@ -51,276 +44,224 @@ export default function RidesPage({
 
   const formatDateTime = (dateString: string | null) => {
     if (!dateString) return 'Flexible';
-    return new Date(dateString).toLocaleString();
+    return new Date(dateString).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12">
+      <div className="flex flex-col justify-center items-center py-20 gap-4">
         <LoadingSpinner size="lg" />
-        <span className="ml-2 text-gray-600">Loading rides...</span>
+        <p className="text-slate-400 font-medium animate-pulse">Loading rides...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Ride Management</h2>
-          <p className="text-gray-600">Monitor and manage active rides</p>
-        </div>
-        <div className="text-sm text-gray-500">
-          Page {currentPage} of {totalPages} • {total} total rides
-        </div>
-      </div>
-
-      {rides.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <Car className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No rides found</h3>
-          <p className="mt-1 text-sm text-gray-500">There are no rides matching your criteria.</p>
-        </div>
-      ) : (
-        <>
-          {/* Ride List */}
-          <div className="grid gap-6">
+    <div className="flex flex-col h-full bg-slate-50/30">
+      <div className="p-8 space-y-8">
+        {rides.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-[2rem] border border-slate-100">
+            <Car className="w-16 h-16 mb-4 opacity-20" />
+            <p className="text-lg font-medium">No rides found</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {rides.map((ride) => (
-              <div key={ride.id} className="bg-white rounded-lg border border-gray-200 p-6">
-                <div className="flex flex-col lg:flex-row gap-6">
-                  {/* Ride Info */}
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <Car className="h-6 w-6 text-blue-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">Ride #{ride.id}</h3>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[ride.status]}`}>
-                          {ride.status.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Created: {new Date(ride.created_at).toLocaleDateString()}
-                      </div>
+              <div 
+                key={ride.id} 
+                className="bg-white rounded-[2rem] border border-slate-100 p-8 hover:shadow-xl hover:shadow-slate-200/50 transition-all group relative overflow-hidden"
+              >
+                <div className="flex justify-between items-start mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                      <Car className="w-6 h-6" />
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-medium">From</div>
-                          <div className="text-sm text-gray-600">{ride.from_address}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-medium">To</div>
-                          <div className="text-sm text-gray-600">{ride.to_address}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-medium">Departure</div>
-                          <div className="text-sm text-gray-600">{formatDateTime(ride.departure_time)}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-medium">Seats</div>
-                          <div className="text-sm text-gray-600">
-                            {ride.seats_available} / {ride.total_seats} available
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="text-sm font-medium">Price per seat</div>
-                          <div className="text-sm text-gray-600">{ride.price_per_seat} Birr</div>
-                        </div>
-                      </div>
-
-                      {ride.driver && (
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-gray-400" />
-                          <div>
-                            <div className="text-sm font-medium">Driver</div>
-                            <div className="text-sm text-gray-600">
-                              {ride.driver.first_name} {ride.driver.last_name}
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 leading-tight">Ride #{ride.id}</h3>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">ID: {ride.plate_number}</p>
                     </div>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusColors[ride.status]}`}>
+                    {ride.status}
+                  </span>
+                </div>
 
-                    {/* Vehicle Info */}
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                      <div className="text-sm font-medium text-gray-900">Vehicle Details</div>
-                      <div className="text-sm text-gray-600">
-                        {ride.brand_name} {ride.color} • Plate: {ride.plate_number}
-                      </div>
+                <div className="space-y-6">
+                  {/* Route Timeline */}
+                  <div className="relative pl-8 space-y-6 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100 before:border-l before:border-dashed before:border-slate-300">
+                    <div className="relative">
+                      <div className="absolute -left-[26px] top-1.5 w-4 h-4 rounded-full bg-white border-4 border-blue-500 z-10" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Pickup</p>
+                      <p className="text-sm font-bold text-slate-700 line-clamp-1">{ride.from_address}</p>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute -left-[26px] top-1.5 w-4 h-4 rounded-full bg-white border-4 border-emerald-500 z-10" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination</p>
+                      <p className="text-sm font-bold text-slate-700 line-clamp-1">{ride.to_address}</p>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => setSelectedRide(ride)}
-                      className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
-                    </button>
+                  <div className="grid grid-cols-3 gap-4 py-6 border-y border-slate-50">
+                    <div className="space-y-1 text-center">
+                      <Clock className="w-4 h-4 text-slate-300 mx-auto mb-1" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Departure</p>
+                      <p className="text-xs font-bold text-slate-700">{formatDateTime(ride.departure_time)}</p>
+                    </div>
+                    <div className="space-y-1 text-center border-x border-slate-50">
+                      <Users className="w-4 h-4 text-slate-300 mx-auto mb-1" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Seats</p>
+                      <p className="text-xs font-bold text-slate-700">{ride.seats_available}/{ride.total_seats}</p>
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <DollarSign className="w-4 h-4 text-slate-300 mx-auto mb-1" />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Price</p>
+                      <p className="text-xs font-bold text-emerald-600">{ride.price_per_seat} ETB</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 uppercase border border-slate-200">
+                        {ride.driver?.first_name?.[0]}{ride.driver?.last_name?.[0]}
+                      </div>
+                      <span className="text-xs font-bold text-slate-600">{ride.driver?.first_name} {ride.driver?.last_name}</span>
+                    </div>
                     
-                    {ride.status === 'active' && (
+                    <div className="flex gap-2">
                       <button
-                        onClick={() => handleCancel(ride.id)}
-                        className="inline-flex items-center justify-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                        onClick={() => setSelectedRide(ride)}
+                        className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-100"
+                        title="View Details"
                       >
-                        <Cancel className="h-4 w-4 mr-2" />
-                        Cancel Ride
+                        <Eye className="w-5 h-5" />
                       </button>
-                    )}
+                      {ride.status === 'active' && (
+                        <button
+                          onClick={() => handleCancel(ride.id)}
+                          className="p-2.5 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors border border-transparent hover:border-rose-100"
+                          title="Cancel Ride"
+                        >
+                          <Cancel className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+        )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-2 mt-6">
-              <button
-                onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              
-              <div className="flex gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const page = Math.max(1, currentPage - 2) + i;
-                  if (page > totalPages) return null;
-                  
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => onPageChange(page)}
-                      className={`px-3 py-2 border rounded-lg ${
-                        page === currentPage
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'border-gray-300 text-gray-700'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                })}
-              </div>
-              
-              <button
-                onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
+        {/* Improved Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4 mt-8">
+            <button
+              onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all shadow-sm"
+            >
+              Previous
+            </button>
+            <div className="flex gap-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => onPageChange(page)}
+                  className={`w-10 h-10 rounded-xl font-bold transition-all ${
+                    page === currentPage
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                      : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
             </div>
-          )}
-        </>
-      )}
+            <button
+              onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="px-6 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all shadow-sm"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* Ride Details Modal */}
+      {/* Modern Ride Modal */}
       {selectedRide && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Ride Details #{selectedRide.id}</h3>
-              <button
-                onClick={() => setSelectedRide(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <Car className="w-6 h-6 text-blue-600" />
+                <h3 className="text-xl font-bold text-slate-900">Ride Review #{selectedRide.id}</h3>
+              </div>
+              <button onClick={() => setSelectedRide(null)} className="w-10 h-10 rounded-full hover:bg-white flex items-center justify-center transition-colors">✕</button>
             </div>
             
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Status</label>
-                  <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[selectedRide.status]}`}>
-                    {selectedRide.status.toUpperCase()}
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Price per Seat</label>
-                  <div className="text-sm text-gray-900">{selectedRide.price_per_seat} Birr</div>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium text-gray-700">From</label>
-                  <div className="text-sm text-gray-900">{selectedRide.from_address}</div>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium text-gray-700">To</label>
-                  <div className="text-sm text-gray-900">{selectedRide.to_address}</div>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Departure Time</label>
-                  <div className="text-sm text-gray-900">{formatDateTime(selectedRide.departure_time)}</div>
-                </div>
-                
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Seats</label>
-                  <div className="text-sm text-gray-900">
-                    {selectedRide.seats_available} / {selectedRide.total_seats} available
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700">Vehicle Details</label>
-                <div className="text-sm text-gray-900">
-                  {selectedRide.brand_name} • {selectedRide.color} • {selectedRide.plate_number}
-                </div>
-              </div>
-              
-              {selectedRide.participants && selectedRide.participants.length > 0 && (
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Participants</label>
-                  <div className="space-y-2 mt-2">
-                    {selectedRide.participants.map((participant, index) => (
-                      <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
-                        <div className="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-blue-600 text-sm font-medium">
-                            {participant.first_name[0]}{participant.last_name[0]}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">
-                            {participant.first_name} {participant.last_name}
-                            {participant.is_driver && (
-                              <span className="ml-2 text-xs text-blue-600">(Driver)</span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-500">{participant.email}</div>
-                        </div>
+            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Driver Info</p>
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
+                        {selectedRide.driver?.first_name?.[0]}
                       </div>
-                    ))}
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{selectedRide.driver?.first_name} {selectedRide.driver?.last_name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Verified Driver</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vehicle Details</p>
+                    <p className="text-sm font-bold text-slate-700">{selectedRide.brand_name} • {selectedRide.color}</p>
+                    <p className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md inline-block uppercase mt-1">{selectedRide.plate_number}</p>
                   </div>
                 </div>
-              )}
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Financials</p>
+                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                    <p className="text-2xl font-black text-emerald-700">{selectedRide.price_per_seat} <span className="text-xs font-bold uppercase tracking-widest opacity-70">ETB / Seat</span></p>
+                    <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest mt-1">Platform fee included</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Passengers</p>
+                  <div className="flex -space-x-3 mt-2">
+                    {selectedRide.participants?.map((_, i) => (
+                      <div key={i} className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-500 shadow-sm">
+                        P{i+1}
+                      </div>
+                    )) || <p className="text-xs text-slate-400 font-medium italic">No passengers yet</p>}
+                    {selectedRide.total_seats - (selectedRide.seats_available || 0) > 0 && (
+                      <div className="pl-6 flex items-center text-xs font-bold text-slate-500">
+                        {selectedRide.total_seats - selectedRide.seats_available} booked
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-8 pt-0">
+               <button 
+                onClick={() => setSelectedRide(null)}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl shadow-slate-900/20 hover:scale-[1.01] transition-all"
+               >
+                Close Review
+               </button>
             </div>
           </div>
         </div>
