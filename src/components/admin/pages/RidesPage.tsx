@@ -306,7 +306,7 @@ export default function RidesPage({
                               <span className="text-[10px] font-black text-slate-900 uppercase">{msg.first_name} {msg.last_name}</span>
                               <span className="text-[8px] font-bold text-slate-400 tracking-tighter">{new Date(msg.created_at).toLocaleTimeString()}</span>
                             </div>
-                            <p className="text-sm text-slate-600 font-medium">{msg.message}</p>
+                            <p className="text-sm text-slate-600 font-medium">{msg.content}</p>
                           </div>
                         </div>
                       ))
