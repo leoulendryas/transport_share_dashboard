@@ -31,6 +31,7 @@ import ReportsPage from '@/components/admin/pages/ReportsPage';
 import PaymentsPage from '@/components/admin/pages/PaymentsPage';
 import SosAlertsPage from '@/components/admin/pages/SosAlertsPage';
 import CompaniesPage from '@/components/admin/pages/CompaniesPage';
+import ConfigPage from '@/components/admin/pages/ConfigPage';
 
 import { 
   Users, 
@@ -270,6 +271,8 @@ export default function DashboardPage() {
                 {activeTab === 'sos' && <SosAlertsPage />}
 
                 {activeTab === 'companies' && <CompaniesPage />}
+
+                {activeTab === 'config' && <ConfigPage />}
               </div>
             )}
           </div>

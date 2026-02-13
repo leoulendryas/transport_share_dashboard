@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { User } from '@/types/user';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Ban, UserCheck, UserX, Search, Mail, Phone, Calendar, Shield, MoreVertical } from 'lucide-react';
+import { Ban, UserCheck, UserX, Search, Mail, Phone, Calendar, Shield, MoreVertical, Eye } from 'lucide-react';
 
 interface UsersPageProps {
   users: User[];
@@ -106,78 +106,74 @@ export default function UsersPage({ users, onBan, onUnban, loading = false }: Us
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredUsers.map((user) => (
+              {filteredUsers.map((user, idx) => (
                 <tr 
                   key={user.id} 
-                  className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+                  style={{ animationDelay: `${idx * 50}ms` }}
+                  className="hover:bg-slate-50/80 transition-all group cursor-pointer animate-in fade-in slide-in-from-left-4 fill-mode-both"
                   onClick={() => setSelectedUser(user)}
                 >
-                  <td className="px-6 py-4">
+                  <td className="px-8 py-5">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-600 font-bold border border-slate-200">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center text-slate-600 font-black border-2 border-white shadow-sm group-hover:scale-110 transition-transform">
                         {user.first_name?.[0]}{user.last_name?.[0]}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">{user.first_name} {user.last_name}</span>
-                          {user.is_admin && <Shield className="w-3.5 h-3.5 text-indigo-500" />}
+                          <span className="font-black text-slate-900 tracking-tight">{user.first_name} {user.last_name}</span>
+                          {user.is_admin && <div className="px-1.5 py-0.5 bg-indigo-50 rounded-md"><Shield className="w-3 h-3 text-indigo-600" /></div>}
                         </div>
-                        <span className="text-xs font-medium text-slate-400 uppercase">ID: #{user.id}</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ID: #{user.id}</span>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-8 py-5">
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                        <Mail className="w-3.5 h-3.5 text-slate-400" />
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                        <Mail className="w-3.5 h-3.5 text-slate-300" />
                         {user.email}
                       </div>
-                      <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                        <Phone className="w-3.5 h-3.5 text-slate-300" />
                         {user.phone_number}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  <td className="px-8 py-5">
+                    <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border ${
                       user.banned 
-                        ? 'bg-rose-50 text-rose-600 border border-rose-100' 
-                        : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                        ? 'bg-rose-50 text-rose-600 border-rose-100' 
+                        : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                     }`}>
                       {user.banned ? 'Banned' : 'Active'}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1.5">
-                      <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase ${
-                        user.id_verified ? 'text-blue-600' : 'text-slate-400'
-                      }`}>
-                        ID: {user.id_verified ? 'Verified' : 'Pending'}
-                      </div>
-                      <div className="flex gap-2">
-                        <div className={`w-2 h-2 rounded-full ${user.email_verified ? 'bg-blue-500' : 'bg-slate-200'}`} title="Email Verified" />
-                        <div className={`w-2 h-2 rounded-full ${user.phone_verified ? 'bg-blue-500' : 'bg-slate-200'}`} title="Phone Verified" />
-                      </div>
+                  <td className="px-8 py-5 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {user.banned ? (
+                        <button
+                          onClick={() => handleUnban(user)}
+                          className="w-10 h-10 flex items-center justify-center bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm"
+                          title="Unban User"
+                        >
+                          <UserCheck className="w-5 h-5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleBan(user)}
+                          className="w-10 h-10 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-xl transition-all shadow-sm"
+                          title="Ban User"
+                        >
+                          <Ban className="w-5 h-5" />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setSelectedUser(user)}
+                        className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white rounded-xl transition-all shadow-sm"
+                      >
+                        <Eye className="w-5 h-5" />
+                      </button>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    {user.banned ? (
-                      <button
-                        onClick={() => handleUnban(user)}
-                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                        title="Unban User"
-                      >
-                        <UserCheck className="w-5 h-5" />
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleBan(user)}
-                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="Ban User"
-                      >
-                        <Ban className="w-5 h-5" />
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}
