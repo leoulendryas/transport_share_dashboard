@@ -44,62 +44,62 @@ export default function VerificationsPage({
   return (
     <div className="p-8">
       {verifications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
-          <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-emerald-500 mb-4">
+        <div className="flex flex-col items-center justify-center py-20 bg-slate-50 dark:bg-slate-900/50 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800 transition-colors">
+          <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center text-emerald-500 mb-4">
             <Check className="w-8 h-8" />
           </div>
-          <h3 className="text-xl font-bold text-slate-900">All Caught Up!</h3>
-          <p className="text-slate-500 font-medium">No pending ID verifications at the moment.</p>
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white">All Caught Up!</h3>
+          <p className="text-slate-500 dark:text-slate-400 font-medium">No pending ID verifications at the moment.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
           {verifications.map((verification) => (
-            <div key={verification.id} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow group">
+            <div key={verification.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden hover:shadow-md transition-all group rounded-[2rem]">
               <div className="p-8">
                 <div className="flex items-start justify-between mb-8">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30">
                       <User className="w-7 h-7" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900">{verification.first_name} {verification.last_name}</h3>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white">{verification.first_name} {verification.last_name}</h3>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md uppercase">ID: #{verification.id}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{new Date(verification.created_at).toLocaleDateString()}</span>
+                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-md uppercase">ID: #{verification.id}</span>
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{new Date(verification.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-bold uppercase border border-amber-100">
+                  <div className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full text-[10px] font-bold uppercase border border-amber-100 dark:border-amber-900/30">
                     Pending Review
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-y-4 gap-x-8 mb-8">
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Information</p>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Contact Information</p>
                     <div className="flex flex-col gap-0.5">
-                      <p className="text-sm font-semibold text-slate-700 truncate">{verification.email}</p>
-                      <p className="text-sm font-semibold text-slate-700">{verification.phone_number}</p>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 truncate">{verification.email}</p>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{verification.phone_number}</p>
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Personal Details</p>
-                    <p className="text-sm font-semibold text-slate-700">{verification.gender}, {verification.age} years old</p>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Personal Details</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{verification.gender}, {verification.age} years old</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Banking Info</p>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Banking Info</p>
                     <div className="flex flex-col gap-0.5">
-                      <p className="text-sm font-semibold text-slate-700">{verification.preferred_bank}</p>
-                      <p className="text-xs font-medium text-slate-500 font-mono">{verification.bank_account_number}</p>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{verification.preferred_bank}</p>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 font-mono">{verification.bank_account_number}</p>
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Joined On</p>
-                    <p className="text-sm font-semibold text-slate-700">{new Date(verification.created_at).toLocaleDateString()}</p>
+                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Joined On</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{new Date(verification.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
 
-                <div className="relative group/img rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 mb-8">
+                <div className="relative group/img rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-8">
                   <img
                     src={verification.id_image_url}
                     alt="ID Document"
@@ -107,7 +107,7 @@ export default function VerificationsPage({
                     onClick={() => setPreviewImageUrl(verification.id_image_url)}
                   />
                   <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onClick={() => setPreviewImageUrl(verification.id_image_url)}>
-                    <div className="px-4 py-2 bg-white rounded-xl text-sm font-bold text-slate-900 shadow-xl flex items-center gap-2">
+                    <div className="px-4 py-2 bg-white dark:bg-slate-900 rounded-xl text-sm font-bold text-slate-900 dark:text-white shadow-xl flex items-center gap-2">
                       <Eye className="w-4 h-4" /> Inspect Document
                     </div>
                   </div>
@@ -122,7 +122,7 @@ export default function VerificationsPage({
                   </button>
                   <button
                     onClick={() => handleReject(verification.id)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl font-bold transition-all border border-rose-100 active:scale-[0.98]"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-rose-50 dark:bg-rose-900/10 hover:bg-rose-100 dark:hover:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl font-bold transition-all border border-rose-100 dark:border-rose-900/30 active:scale-[0.98]"
                   >
                     <X className="w-5 h-5" /> Reject
                   </button>

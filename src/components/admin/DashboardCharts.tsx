@@ -43,10 +43,10 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 transition-colors">
       {/* Ride Distribution Pie Chart */}
-      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8">Ride Distribution</h3>
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+        <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-8">Ride Distribution</h3>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -58,6 +58,7 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
                 outerRadius={80}
                 paddingAngle={8}
                 dataKey="value"
+                stroke="none"
               >
                 {rideData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
@@ -67,8 +68,11 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
                 contentStyle={{ 
                   borderRadius: '1rem', 
                   border: 'none', 
-                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' 
+                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                  backgroundColor: '#0f172a',
+                  color: '#fff'
                 }} 
+                itemStyle={{ color: '#fff' }}
               />
               <Legend verticalAlign="bottom" height={36}/>
             </PieChart>
@@ -77,12 +81,12 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
       </div>
 
       {/* Payment Success Bar Chart */}
-      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8">Transaction Volume</h3>
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+        <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-8">Transaction Volume</h3>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={paymentData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800" />
               <XAxis 
                 dataKey="name" 
                 axisLine={false} 
@@ -95,12 +99,15 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
                 tick={{ fill: '#94a3b8', fontWeight: 600, fontSize: 12 }}
               />
               <Tooltip 
-                cursor={{ fill: '#f8fafc' }}
+                cursor={{ fill: '#f8fafc', opacity: 0.1 }}
                 contentStyle={{ 
                   borderRadius: '1rem', 
                   border: 'none', 
-                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' 
+                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                  backgroundColor: '#0f172a',
+                  color: '#fff'
                 }} 
+                itemStyle={{ color: '#fff' }}
               />
               <Bar dataKey="amount" radius={[10, 10, 10, 10]} barSize={40} />
             </BarChart>
