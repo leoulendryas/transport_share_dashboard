@@ -43,7 +43,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 font-bold">
           G
         </div>
-        <span className="font-semibold text-zinc-950 dark:text-white tracking-tight">GeoRide Admin</span>
+        <span className="font-semibold text-zinc-950 dark:text-white tracking-tight">gara admin</span>
       </div>
       
       <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8">

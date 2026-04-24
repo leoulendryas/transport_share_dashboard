@@ -39,7 +39,7 @@ export default function LoginPage() {
             <Shield className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tight">GeoRide Administrative</h1>
+            <h1 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tight">gara administrative</h1>
             <p className="text-sm font-medium text-zinc-500">Secure access to the platform control center.</p>
           </div>
         </div>
@@ -62,7 +62,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all dark:text-zinc-100"
-                  placeholder="admin@georide.com"
+                  placeholder="admin@gara.com"
                   required
                 />
               </div>

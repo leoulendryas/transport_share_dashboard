@@ -8,8 +8,8 @@ import { ThemeProvider } from '@/context/ThemeContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'GeoRide Admin Dashboard',
-  description: 'Enterprise administration panel for GeoRide carpooling',
+  title: 'gara admin',
+  description: 'Enterprise administration panel for gara transport',
 };
 
 export default function RootLayout({
