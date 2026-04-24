@@ -21,6 +21,9 @@ export interface User {
   bank_account_number?: string;
   member_level?: string;
   last_login?: string;
+  failed_login_attempts?: number;
+  lockout_until?: string;
+  rejection_reason?: string;
 }
 
 export interface DetailedUser extends User {
@@ -194,11 +197,6 @@ export interface Company {
   created_at?: string;
 }
 
-export interface RefreshTokenResponse {
-  access_token: string;
-  refresh_token: string;
-}
-
 export interface Message {
   id: number;
   user_id: number;
@@ -210,6 +208,11 @@ export interface Message {
   email?: string;
   first_name?: string;
   last_name?: string;
+}
+
+export interface RefreshTokenResponse {
+  access_token: string;
+  refresh_token: string;
 }
 
 export interface ApiResponse<T> {

@@ -19,7 +19,11 @@ import {
   User as UserIcon,
   CheckCircle2,
   XCircle,
-  Hash
+  Hash,
+  AlertCircle,
+  Clock,
+  Activity,
+  Key
 } from 'lucide-react';
 import { getUsers, toggleAdminStatus, getUserById, updateMemberLevel, banUser, unbanUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -183,11 +187,12 @@ export default function UsersPage() {
       )
     },
     {
-      header: 'Member Since',
+      header: 'Activity',
       accessor: (user: User) => (
-        <span className="text-zinc-500 font-medium tabular-nums">
-          {new Date(user.created_at).toLocaleDateString()}
-        </span>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100">Joined: {new Date(user.created_at).toLocaleDateString()}</span>
+          <span className="text-[10px] text-zinc-400 font-medium">Last: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</span>
+        </div>
       )
     },
     {
@@ -273,7 +278,7 @@ export default function UsersPage() {
                   <Badge variant={detailedUser.banned ? 'error' : 'success'}>
                     {detailedUser.banned ? 'Suspended' : 'Active Account'}
                   </Badge>
-                  <span className="text-[10px] font-mono font-black text-zinc-400">NODE_{detailedUser.id}</span>
+                  <span className="text-[10px] font-mono font-black text-zinc-400 uppercase">NODE_{detailedUser.id}</span>
                 </div>
               </div>
             </div>
@@ -298,6 +303,19 @@ export default function UsersPage() {
                 {detailedUser.banned ? 'Restore Access' : 'Suspend Node'}
               </Button>
             </div>
+
+            {detailedUser.failed_login_attempts && detailedUser.failed_login_attempts > 0 && (
+               <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-500" />
+                  <div>
+                     <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Security Alert</p>
+                     <p className="text-xs font-bold text-rose-500">{detailedUser.failed_login_attempts} Failed Login Attempts recorded</p>
+                     {detailedUser.lockout_until && new Date(detailedUser.lockout_until) > new Date() && (
+                        <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-black">LOCKED UNTIL: {new Date(detailedUser.lockout_until).toLocaleString()}</p>
+                     )}
+                  </div>
+               </div>
+            )}
 
             <div className="space-y-6">
                <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-6">
@@ -352,17 +370,28 @@ export default function UsersPage() {
                   </div>
                </div>
 
-               <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                     <Fingerprint className="w-5 h-5 text-zinc-400" />
-                     <div>
-                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">ID Verification</p>
-                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{detailedUser.id_verified ? 'AUTHORIZED' : 'PENDING_REVIEW'}</p>
+               <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <Activity className="w-5 h-5 text-zinc-400" />
+                        <div>
+                           <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Last Activity</p>
+                           <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{detailedUser.last_login ? new Date(detailedUser.last_login).toLocaleString() : 'VOID'}</p>
+                        </div>
                      </div>
                   </div>
-                  <Badge variant={detailedUser.id_verified ? 'success' : 'zinc'}>
-                     {detailedUser.id_verified ? 'MATCH' : 'VOID'}
-                  </Badge>
+                  <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <Fingerprint className="w-5 h-5 text-zinc-400" />
+                        <div>
+                           <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Identity Auth</p>
+                           <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{detailedUser.id_verified ? 'MATCH_SUCCESS' : 'PENDING_SCAN'}</p>
+                        </div>
+                     </div>
+                     <Badge variant={detailedUser.id_verified ? 'success' : 'zinc'}>
+                        {detailedUser.id_verified ? 'VERIFIED' : 'VOID'}
+                     </Badge>
+                  </div>
                </div>
             </div>
 
@@ -375,15 +404,15 @@ export default function UsersPage() {
                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No assets linked to node</p>
                 ) : detailedUser.vehicles?.map(v => (
                   <div key={v.id} className="p-4 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex items-center gap-4 shadow-sm">
-                    <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700">
+                    <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
                       <Car className="w-4 h-4 text-zinc-900 dark:text-white" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tracking-tight">{v.make} {v.model}</p>
+                      <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tracking-tight">{v.make} {v.model} ({v.year || '?'})</p>
                       <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">{v.license_plate} • {v.color}</p>
                     </div>
                     <Badge variant={v.is_verified ? 'success' : 'zinc'}>
-                      {v.is_verified ? 'AUTH' : 'PEND'}
+                      {v.verification_status || 'PEND'}
                     </Badge>
                   </div>
                 ))}
@@ -392,9 +421,28 @@ export default function UsersPage() {
 
             <div className="space-y-6 pt-6 border-t border-zinc-100 dark:border-zinc-900">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5" /> Active Trajectories ({detailedUser.recentRides?.length || 0})
+              </h4>
+              <div className="space-y-3">
+                 {detailedUser.recentRides?.length === 0 ? (
+                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No mission history</p>
+                 ) : detailedUser.recentRides?.map(ride => (
+                   <div key={ride.id} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+                      <div>
+                         <p className="text-[10px] font-black text-zinc-950 dark:text-white uppercase">RIDE_{ride.id}</p>
+                         <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">{ride.from_address.split(',')[0]} → {ride.to_address.split(',')[0]}</p>
+                      </div>
+                      <Badge variant={ride.status === 'completed' ? 'success' : 'zinc'}>{ride.status}</Badge>
+                   </div>
+                 ))}
+              </div>
+            </div>
+
+            <div className="space-y-6 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 <Star className="w-3.5 h-3.5" /> Reputation Log
               </h4>
-              <div className="space-y-6">
+              <div className="space-y-6 pb-10">
                 {detailedUser.recentReviews?.length === 0 ? (
                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No reputation data found</p>
                 ) : detailedUser.recentReviews?.map(r => (
@@ -405,7 +453,7 @@ export default function UsersPage() {
                           <Star key={i} className={`w-2.5 h-2.5 ${i < r.rating ? 'fill-zinc-950 text-zinc-950 dark:fill-white dark:text-white' : 'text-zinc-200 dark:text-zinc-800'}`} />
                         ))}
                       </div>
-                      <span className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">{new Date(r.created_at).toLocaleDateString()}</span>
+                      <span className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">SENT BY: {r.reviewer_name || 'ANON'} • {new Date(r.created_at).toLocaleDateString()}</span>
                     </div>
                     <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 group-hover:border-zinc-300 dark:group-hover:border-zinc-700 transition-colors">
                        <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed font-medium italic">"{r.comment}"</p>
