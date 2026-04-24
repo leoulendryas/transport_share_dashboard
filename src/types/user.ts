@@ -199,6 +199,19 @@ export interface RefreshTokenResponse {
   refresh_token: string;
 }
 
+export interface Message {
+  id: number;
+  user_id: number;
+  ride_id: number;
+  message_text?: string;
+  message?: string;
+  content?: string;
+  created_at: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;

@@ -10,7 +10,8 @@ import {
   Review,
   SOSAlert,
   Vehicle,
-  Company
+  Company,
+  Message
 } from '@/types/user';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -212,9 +213,9 @@ export const adminCancelRide = async (token: string, rideId: number): Promise<{ 
   return handleResponse(response);
 };
 
-export const getRideMessages = async (token: string, rideId: number): Promise<any[]> => {
+export const getRideMessages = async (token: string, rideId: number): Promise<Message[]> => {
   const response = await fetch(`${API_BASE_URL}/admin/rides/${rideId}/messages`, { headers: getHeaders(token) });
-  return handleResponse(response);
+  return handleResponse<Message[]>(response);
 };
 
 // --- SOS & REPORTS ---
