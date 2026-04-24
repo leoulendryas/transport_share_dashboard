@@ -4,11 +4,13 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Shield, ArrowRight } from 'lucide-react';
+import { Shield, ArrowRight, Sun, Moon } from 'lucide-react';
 import Link from 'next/link';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function HomePage() {
   const { admin, loading } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
 
   useEffect(() => {
@@ -20,7 +22,16 @@ export default function HomePage() {
   if (loading) return null;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 transition-colors">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 transition-colors selection:bg-zinc-950 selection:text-white dark:selection:bg-white dark:selection:text-zinc-950">
+      
+      {/* Floating Theme Toggle */}
+      <button 
+        onClick={toggleTheme}
+        className="fixed top-8 right-8 p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl shadow-zinc-200 dark:shadow-none transition-all hover:scale-110 active:scale-95"
+      >
+        {theme === 'light' ? <Moon className="w-5 h-5 fill-zinc-950" /> : <Sun className="w-5 h-5 fill-white" />}
+      </button>
+
       <div className="w-full max-w-[600px] text-center space-y-10 animate-in fade-in zoom-in duration-1000">
         <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-2xl shadow-zinc-200 dark:shadow-none mb-4">
           <Shield className="w-8 h-8" />
