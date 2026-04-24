@@ -1,138 +1,141 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Building2, Plus, Trash2, Building, Globe, Mail, Phone, MoreHorizontal } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Building2, Plus, Trash2, Search } from 'lucide-react';
 import { getCompanies, createCompany, deleteCompany } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/components/ui/Button';
+import { DataTable } from '@/components/ui/DataTable';
+import { Company } from '@/types/user';
 
 export default function CompaniesPage() {
   const { token } = useAuth();
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [newCompanyName, setNewCompanyName] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchCompanies = async () => {
+  const load = async () => {
     if (!token) return;
     setLoading(true);
     try {
       const data = await getCompanies(token);
-      setCompanies(data || []);
+      setCompanies(data);
     } catch (error) {
-      console.error('Failed to fetch companies');
+      console.error('Failed to load companies', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCompanies();
+    load();
   }, [token]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !newCompanyName) return;
-    setIsAdding(true);
+    if (!token || !name || isSubmitting) return;
+    
+    setIsSubmitting(true);
     try {
-      await createCompany(token, newCompanyName);
-      setNewCompanyName('');
-      fetchCompanies();
+      await createCompany(token, name);
+      setName('');
+      await load();
     } catch (error) {
       alert('Failed to add company');
     } finally {
-      setIsAdding(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!token || !window.confirm('Delete this company partner?')) return;
+    if (!token || !confirm('Are you sure you want to delete this company?')) return;
     try {
       await deleteCompany(token, id);
-      fetchCompanies();
+      await load();
     } catch (error) {
       alert('Failed to delete company');
     }
   };
 
-  if (loading && companies.length === 0) {
-    return (
-      <div className="flex flex-col justify-center items-center py-20 gap-4">
-        <LoadingSpinner size="lg" />
-        <p className="text-slate-400 font-medium animate-pulse">Loading partners...</p>
-      </div>
-    );
-  }
+  const columns = [
+    {
+      header: 'Company Name',
+      accessor: (c: Company) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+            <Building2 className="w-4 h-4 text-zinc-500" />
+          </div>
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">{c.name}</span>
+        </div>
+      )
+    },
+    {
+      header: 'ID',
+      accessor: (c: Company) => <span className="text-zinc-500 text-xs">#{c.id}</span>
+    },
+    {
+      header: 'Actions',
+      accessor: (c: Company) => (
+        <div className="flex justify-end">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => handleDelete(c.id)}
+            className="text-zinc-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      )
+    }
+  ];
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-900 mb-6">Register New Partner</h3>
-        <form onSubmit={handleCreate} className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative group">
-            <Building className="w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
-            <input
-              type="text"
-              value={newCompanyName}
-              onChange={(e) => setNewCompanyName(e.target.value)}
-              className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-transparent focus:bg-white focus:border-blue-600 rounded-2xl outline-none transition-all font-bold text-slate-900"
-              placeholder="Partner Company Name"
-              required
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+        <div className="p-6 border-b border-zinc-100 dark:border-zinc-900">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Register New Partner</h3>
+          <p className="text-xs text-zinc-500 mt-1">Add companies to map rides and manage corporate accounts.</p>
+        </div>
+        <form onSubmit={handleAdd} className="p-6 flex gap-4">
+          <div className="relative flex-1">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <input 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              placeholder="Enter company name..." 
+              className="w-full pl-10 pr-4 py-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all"
+              required 
             />
           </div>
-          <button
-            type="submit"
-            disabled={isAdding}
-            className="px-10 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black shadow-xl shadow-blue-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-          >
-            {isAdding ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <Plus className="w-5 h-5" />}
-            Register
-          </button>
+          <Button type="submit" loading={isSubmitting}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Company
+          </Button>
         </form>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {companies.map((company) => (
-          <div key={company.id} className="bg-white rounded-[2rem] border border-slate-100 p-8 hover:shadow-xl transition-all group relative">
-            <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors mb-6 border border-slate-100">
-              <Building2 className="w-8 h-8" />
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-xl font-bold text-slate-900 tracking-tight">{company.name}</h4>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">ID: #{company.id}</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                  <Globe className="w-4 h-4" /> Partner Network
-                </div>
-                <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                   <Mail className="w-4 h-4" /> support@{company.name.toLowerCase().replace(/\s/g, '')}.com
-                </div>
-              </div>
-
-              <div className="pt-6 border-t border-slate-50 flex justify-between items-center">
-                <button className="text-xs font-black uppercase text-blue-600 tracking-widest hover:underline">View Fleet</button>
-                <button 
-                  onClick={() => handleDelete(company.id)}
-                  className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-100 transition-colors"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {companies.length === 0 && !loading && (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-[2rem] border border-dashed border-slate-200">
-          <Building2 className="w-16 h-16 mb-4 opacity-10" />
-          <p className="text-lg font-medium">No partners yet</p>
+      <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+        <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Active Partners</h3>
+          <div className="text-xs text-zinc-500 font-medium">Total: {companies.length}</div>
         </div>
-      )}
+        
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <LoadingSpinner />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Loading Directory</span>
+          </div>
+        ) : (
+          <DataTable 
+            data={companies} 
+            columns={columns} 
+            emptyMessage="No partner companies found."
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminLogin, refreshToken } from '@/lib/api';
-import { Admin } from '@/types/user';
+import { User } from '@/types/user';
+
+interface Admin {
+  id: number;
+  name: string;
+  role: string;
+  token: string;
+  refreshToken: string;
+}
 
 interface AuthContextType {
   admin: Admin | null;
@@ -48,9 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(response.access_token);
       localStorage.setItem('admin', JSON.stringify(adminData));
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login failed:', error);
-      return false;
+      throw error;
     }
   };
 

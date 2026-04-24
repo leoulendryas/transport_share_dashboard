@@ -1,166 +1,322 @@
 'use client';
 
-import { useState } from 'react';
-import { PendingVerification } from '@/types/user';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Check, X, Eye, User, Calendar, IdCard, Building, Mail, Phone, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Vehicle } from '@/types/user';
+import { 
+  Check, 
+  X, 
+  Eye, 
+  ExternalLink,
+  FileText,
+  AlertCircle
+} from 'lucide-react';
+import { 
+  getPendingVerifications, 
+  getPendingLicenses, 
+  getPendingVehicles,
+  verifyUserID,
+  rejectVerification,
+  approveLicense,
+  approveVehicle,
+  rejectVehicle
+} from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { DataTable } from '@/components/ui/DataTable';
+import { Badge } from '@/components/ui/Badge';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
-interface VerificationsPageProps {
-  verifications: PendingVerification[];
-  onVerify: (userId: number) => Promise<void>;
-  onReject: (userId: number) => Promise<void>;
-  loading?: boolean;
-}
+type TabType = 'id' | 'license' | 'vehicles';
 
-export default function VerificationsPage({ 
-  verifications, 
-  onVerify, 
-  onReject, 
-  loading = false 
-}: VerificationsPageProps) {
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+export default function VerificationsPage() {
+  const { token } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('id');
+  const [idVerifications, setIdVerifications] = useState<User[]>([]);
+  const [licenseVerifications, setLicenseVerifications] = useState<User[]>([]);
+  const [vehicleVerifications, setVehicleVerifications] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const handleVerify = (userId: number) => {
-    if (window.confirm('Are you sure you want to approve this verification?')) {
-      onVerify(userId);
+  useEffect(() => {
+    if (token) {
+      fetchData();
+    }
+  }, [token, activeTab]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'id') {
+        const data = await getPendingVerifications(token!);
+        setIdVerifications(data.results);
+      } else if (activeTab === 'license') {
+        const data = await getPendingLicenses(token!);
+        setLicenseVerifications(data as any);
+      } else if (activeTab === 'vehicles') {
+        const data = await getPendingVehicles(token!);
+        setVehicleVerifications(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch verifications');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleReject = (userId: number) => {
-    if (window.confirm('Are you sure you want to reject this verification?')) {
-      onReject(userId);
+  const handleAction = async (type: 'approve' | 'reject', itemType: TabType, id: number) => {
+    if (!token) return;
+    
+    let reason = '';
+    if (type === 'reject') {
+      reason = window.prompt('Please enter a reason for rejection:') || '';
+      if (reason === null) return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      if (itemType === 'id') {
+        if (type === 'approve') await verifyUserID(token, id);
+        else await rejectVerification(token, id, reason);
+      } else if (itemType === 'license') {
+        if (type === 'approve') await approveLicense(token, id);
+        else await rejectVerification(token, id, reason);
+      } else if (itemType === 'vehicles') {
+        if (type === 'approve') await approveVehicle(token, id);
+        else await rejectVehicle(token, id, reason);
+      }
+      setSelectedItem(null);
+      fetchData();
+    } catch (error) {
+      alert(`Failed to ${type} ${itemType}`);
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col justify-center items-center py-20 gap-4">
-        <LoadingSpinner size="lg" />
-        <p className="text-slate-400 font-medium animate-pulse">Loading verifications...</p>
-      </div>
-    );
-  }
+  const idColumns = [
+    {
+      header: 'User',
+      accessor: (v: User) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[10px] font-bold text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800">
+            {v.first_name?.[0]}{v.last_name?.[0]}
+          </div>
+          <div>
+            <p className="font-bold text-zinc-900 dark:text-zinc-100">{v.first_name} {v.last_name}</p>
+            <p className="text-[10px] text-zinc-500">{v.email}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Submitted',
+      accessor: (v: User) => (
+        <span className="text-zinc-500">
+          {v.verification_submitted_at ? new Date(v.verification_submitted_at).toLocaleDateString() : 'N/A'}
+        </span>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: () => <Badge variant="warning">Pending ID</Badge>
+    },
+    {
+      header: '',
+      accessor: (v: User) => (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedItem(v)}>
+            <Eye className="w-4 h-4" />
+          </Button>
+        </div>
+      ),
+      className: 'text-right'
+    }
+  ];
+
+  const vehicleColumns = [
+    {
+      header: 'Vehicle',
+      accessor: (v: Vehicle) => (
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <FileText className="w-3.5 h-3.5 text-zinc-500" />
+          </div>
+          <div>
+            <p className="font-bold text-zinc-900 dark:text-zinc-100">{v.make} {v.model}</p>
+            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">{v.license_plate}</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Owner',
+      accessor: (v: Vehicle) => (
+        <div className="flex flex-col">
+          <span className="text-zinc-900 dark:text-zinc-100">{v.first_name} {v.last_name}</span>
+          <span className="text-[10px] text-zinc-500">{v.owner_email}</span>
+        </div>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: () => <Badge variant="warning">Pending Vehicle</Badge>
+    },
+    {
+      header: '',
+      accessor: (v: Vehicle) => (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedItem(v)}>
+            <Eye className="w-4 h-4" />
+          </Button>
+        </div>
+      ),
+      className: 'text-right'
+    }
+  ];
 
   return (
-    <div className="p-8">
-      {verifications.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-slate-50 dark:bg-slate-900/50 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800 transition-colors">
-          <div className="w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex items-center justify-center text-emerald-500 mb-4">
-            <Check className="w-8 h-8" />
-          </div>
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white">All Caught Up!</h3>
-          <p className="text-slate-500 dark:text-slate-400 font-medium">No pending ID verifications at the moment.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          {verifications.map((verification) => (
-            <div key={verification.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden hover:shadow-md transition-all group rounded-[2rem]">
-              <div className="p-8">
-                <div className="flex items-start justify-between mb-8">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30">
-                      <User className="w-7 h-7" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-white">{verification.first_name} {verification.last_name}</h3>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-md uppercase">ID: #{verification.id}</span>
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{new Date(verification.created_at).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full text-[10px] font-bold uppercase border border-amber-100 dark:border-amber-900/30">
-                    Pending Review
-                  </div>
-                </div>
+    <div className="p-8 space-y-8 bg-white dark:bg-zinc-950 min-h-full">
+      <div className="flex border-b border-zinc-100 dark:border-zinc-900">
+        {(['id', 'license', 'vehicles'] as TabType[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-6 pb-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all relative ${
+              activeTab === tab 
+              ? 'text-zinc-950 dark:text-white' 
+              : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200'
+            }`}
+          >
+            {tab} Verifications
+            {activeTab === tab && (
+              <div className="absolute bottom-0 left-6 right-6 h-0.5 bg-zinc-950 dark:bg-white" />
+            )}
+          </button>
+        ))}
+      </div>
 
-                <div className="grid grid-cols-2 gap-y-4 gap-x-8 mb-8">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Contact Information</p>
-                    <div className="flex flex-col gap-0.5">
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 truncate">{verification.email}</p>
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{verification.phone_number}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Personal Details</p>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{verification.gender}, {verification.age} years old</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Banking Info</p>
-                    <div className="flex flex-col gap-0.5">
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{verification.preferred_bank}</p>
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 font-mono">{verification.bank_account_number}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Joined On</p>
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{new Date(verification.created_at).toLocaleDateString()}</p>
-                  </div>
-                </div>
+      <div className="space-y-4">
+        {activeTab === 'id' && (
+          <DataTable 
+            columns={idColumns} 
+            data={idVerifications} 
+            loading={loading}
+            onRowClick={(v) => setSelectedItem(v)}
+            emptyMessage="No pending ID verifications"
+          />
+        )}
+        {activeTab === 'license' && (
+          <DataTable 
+            columns={idColumns} 
+            data={licenseVerifications} 
+            loading={loading}
+            onRowClick={(v) => setSelectedItem(v)}
+            emptyMessage="No pending license verifications"
+          />
+        )}
+        {activeTab === 'vehicles' && (
+          <DataTable 
+            columns={vehicleColumns} 
+            data={vehicleVerifications} 
+            loading={loading}
+            onRowClick={(v) => setSelectedItem(v)}
+            emptyMessage="No pending vehicle verifications"
+          />
+        )}
+      </div>
 
-                <div className="relative group/img rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-8">
-                  <img
-                    src={verification.id_image_url}
-                    alt="ID Document"
-                    className="w-full h-48 object-cover group-hover/img:scale-105 transition-transform duration-500"
-                    onClick={() => setPreviewImageUrl(verification.id_image_url)}
-                  />
-                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onClick={() => setPreviewImageUrl(verification.id_image_url)}>
-                    <div className="px-4 py-2 bg-white dark:bg-slate-900 rounded-xl text-sm font-bold text-slate-900 dark:text-white shadow-xl flex items-center gap-2">
-                      <Eye className="w-4 h-4" /> Inspect Document
-                    </div>
-                  </div>
+      <Drawer
+        isOpen={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        title="Verification Details"
+      >
+        {selectedItem && (
+          <div className="space-y-8">
+            <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+              {activeTab === 'id' && selectedItem.id_image_url ? (
+                <img src={selectedItem.id_image_url} alt="ID" className="w-full h-full object-cover" />
+              ) : activeTab === 'license' && selectedItem.driving_license_url ? (
+                <img src={selectedItem.driving_license_url} alt="License" className="w-full h-full object-cover" />
+              ) : activeTab === 'vehicles' && selectedItem.registration_doc_url ? (
+                <img src={selectedItem.registration_doc_url} alt="Registration" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400 gap-2">
+                  <AlertCircle className="w-8 h-8 opacity-20" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest opacity-40">No Image Available</p>
                 </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleVerify(verification.id)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-900/20 active:scale-[0.98]"
-                  >
-                    <Check className="w-5 h-5" /> Approve
-                  </button>
-                  <button
-                    onClick={() => handleReject(verification.id)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-rose-50 dark:bg-rose-900/10 hover:bg-rose-100 dark:hover:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl font-bold transition-all border border-rose-100 dark:border-rose-900/30 active:scale-[0.98]"
-                  >
-                    <X className="w-5 h-5" /> Reject
-                  </button>
-                </div>
+              )}
+              
+              <div className="absolute top-4 right-4">
+                <a 
+                  href={selectedItem.id_image_url || selectedItem.driving_license_url || selectedItem.registration_doc_url} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="p-2 bg-white/90 dark:bg-zinc-950/90 rounded-xl shadow-lg text-zinc-900 dark:text-white hover:scale-105 transition-transform"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
               </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* ID Preview Modal */}
-      {previewImageUrl && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-[9999] p-8 animate-in fade-in duration-300">
-          <div className="relative max-w-5xl w-full flex flex-col items-center animate-in zoom-in-95 duration-300">
-            <img
-              src={previewImageUrl}
-              alt="Full ID"
-              className="max-h-[85vh] w-auto object-contain rounded-2xl shadow-2xl"
-            />
-            <div className="mt-6 flex gap-4">
-              <button
-                onClick={() => setPreviewImageUrl(null)}
-                className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold backdrop-blur-md transition-colors border border-white/10"
-              >
-                Close Preview
-              </button>
-              <a 
-                href={previewImageUrl} 
-                target="_blank" 
-                rel="noreferrer"
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-xl shadow-blue-900/40 flex items-center gap-2"
-              >
-                <ExternalLink className="w-4 h-4" /> Open Original
-              </a>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-black text-zinc-950 dark:text-white tracking-tight">
+                  {activeTab === 'vehicles' ? `${selectedItem.make} ${selectedItem.model}` : `${selectedItem.first_name} ${selectedItem.last_name}`}
+                </h3>
+                <p className="text-zinc-500 text-xs font-medium">
+                  {activeTab === 'vehicles' ? `Owner: ${selectedItem.first_name} ${selectedItem.last_name}` : selectedItem.email}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 py-6 border-y border-zinc-100 dark:border-zinc-900">
+                {activeTab === 'vehicles' ? (
+                  <>
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Plate</p>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mt-1 uppercase">{selectedItem.license_plate}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Color</p>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mt-1">{selectedItem.color}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Age / Gender</p>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mt-1">{selectedItem.age || '?'} • {selectedItem.gender || '?'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Phone</p>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mt-1">{selectedItem.phone_number || 'N/A'}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => handleAction('approve', activeTab, selectedItem.id)}
+                  disabled={isActionLoading}
+                  className="flex-1"
+                >
+                  <Check className="w-4 h-4 mr-2" /> Approve
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => handleAction('reject', activeTab, selectedItem.id)}
+                  disabled={isActionLoading}
+                  className="flex-1"
+                >
+                  <X className="w-4 h-4 mr-2" /> Reject
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Drawer>
     </div>
   );
 }

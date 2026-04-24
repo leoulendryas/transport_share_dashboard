@@ -1,209 +1,190 @@
-/*
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-// Replace with your actual API functions
+import { useState, useEffect } from 'react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Mail, MessageSquare, User, Clock, Reply, CheckCircle2 } from 'lucide-react';
 import { fetchSupportMessages, replyToSupport } from '@/lib/api';
-
-type SupportMessage = {
-  id: number;
-  user?: { first_name: string };
-  message: string;
-  reply?: string;
-  replied_at?: string;
-};
-
-type PaginatedSupport = {
-  results: SupportMessage[];
-  pagination: {
-    total: number;
-    page: number;
-    pageSize: number;
-  };
-};
+import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/components/ui/Button';
+import { DataTable } from '@/components/ui/DataTable';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 
 export default function SupportPage() {
-  const { token, refreshAuthToken } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [messages, setMessages] = useState<SupportMessage[]>([]);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    pageSize: 5,
-  });
-  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const { token } = useAuth();
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
-  const mountedRef = useRef(true);
+  const [isSending, setIsSending] = useState(false);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  const loadMessages = async (page = 1): Promise<void> => {
+  const load = async () => {
     if (!token) return;
-    setIsLoading(true);
+    setLoading(true);
     try {
-      const data: PaginatedSupport = await fetchSupportMessages(token, page, pagination.pageSize);
-      if (!mountedRef.current) return;
+      const data = await fetchSupportMessages(token, 1, 50);
       setMessages(data.results);
-      setPagination(prev => ({
-        ...prev,
-        page,
-        total: data.pagination.total,
-      }));
-    } catch (err: any) {
-      if (err?.message?.includes('401')) {
-        const newToken = await refreshAuthToken();
-        if (newToken) return loadMessages(page);
-      }
-      console.error('Failed to load support messages', err);
+    } catch (err) {
+      console.error('Failed to load support messages');
     } finally {
-      if (mountedRef.current) setIsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (token) loadMessages(1);
+    load();
   }, [token]);
 
-  const handleReply = async (messageId: number): Promise<void> => {
-    if (!token || !replyText.trim()) return;
+  const handleReply = async () => {
+    if (!token || !selectedMessage || !replyText || isSending) return;
+    setIsSending(true);
     try {
-      await replyToSupport(token, messageId, replyText.trim());
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === messageId
-            ? { ...m, reply: replyText.trim(), replied_at: new Date().toISOString() }
-            : m
-        )
-      );
-      setReplyingTo(null);
+      await replyToSupport(token, selectedMessage.id, replyText);
       setReplyText('');
-    } catch (err: any) {
-      if (err?.message?.includes('401')) {
-        const newToken = await refreshAuthToken();
-        if (newToken) return handleReply(messageId);
-      }
-      console.error('Reply failed', err);
-      alert('Failed to send reply. Check console for details.');
+      setSelectedMessage(null);
+      await load();
+    } catch (err) {
+      alert('Failed to send reply');
+    } finally {
+      setIsSending(false);
     }
   };
 
-  const totalPages = Math.ceil(pagination.total / pagination.pageSize);
-
-  if (isLoading) {
-    return (
-      <div className="w-full flex items-center justify-center py-10">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
+  const columns = [
+    {
+      header: 'Customer',
+      accessor: (m: any) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center border border-zinc-200 dark:border-zinc-700">
+            <User className="w-4 h-4 text-zinc-500" />
+          </div>
+          <div>
+            <p className="font-bold text-zinc-900 dark:text-white leading-tight">
+              {m.user?.first_name} {m.user?.last_name}
+            </p>
+            <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider mt-0.5">
+              {m.user?.email}
+            </p>
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Inquiry',
+      accessor: (m: any) => (
+        <div className="max-w-md">
+          <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300 truncate italic">
+            "{m.message}"
+          </p>
+          <div className="flex items-center gap-1.5 mt-1 text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+            <Clock className="w-3 h-3" />
+            {new Date(m.created_at).toLocaleDateString()}
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: (m: any) => (
+        <Badge variant={m.reply ? 'success' : 'warning'}>
+          {m.reply ? 'Resolved' : 'Pending'}
+        </Badge>
+      )
+    },
+    {
+      header: '',
+      accessor: (m: any) => (
+        <div className="flex justify-end">
+          <Button 
+            variant={m.reply ? 'secondary' : 'primary'} 
+            size="sm" 
+            onClick={() => setSelectedMessage(m)}
+          >
+            {m.reply ? 'View Log' : 'Write Reply'}
+          </Button>
+        </div>
+      ),
+      className: 'text-right'
+    }
+  ];
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Support Messages</h2>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-zinc-50 dark:bg-zinc-900 rounded-lg border border-zinc-100 dark:border-zinc-800 text-zinc-400">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Customer Inquiries</h3>
+              <p className="text-xs text-zinc-500">Respond to user support tickets and feedback.</p>
+            </div>
+          </div>
+        </div>
 
-      <div className="bg-white rounded-xl shadow p-4">
-        {messages.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">No support messages</div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <LoadingSpinner />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Fetching Tickets</span>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-sm text-gray-500 border-b">
-                  <th className="py-3 px-2">#</th>
-                  <th className="py-3 px-2">User</th>
-                  <th className="py-3 px-2">Message</th>
-                  <th className="py-3 px-2">Reply</th>
-                  <th className="py-3 px-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {messages.map((msg, idx) => (
-                  <tr key={msg.id} className="border-b align-top">
-                    <td className="py-3 px-2">{(pagination.page - 1) * pagination.pageSize + idx + 1}</td>
-                    <td className="py-3 px-2">{msg.user?.first_name || 'Unknown'}</td>
-                    <td className="py-3 px-2">{msg.message}</td>
-                    <td className="py-3 px-2">
-                      {msg.reply ? (
-                        <div>
-                          <p>{msg.reply}</p>
-                          <small className="text-gray-400">
-                            {msg.replied_at ? new Date(msg.replied_at).toLocaleString() : ''}
-                          </small>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">No reply yet</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-2">
-                      {replyingTo === msg.id ? (
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            className="border rounded-md px-2 py-1 text-sm w-full"
-                            value={replyText}
-                            onChange={e => setReplyText(e.target.value)}
-                            placeholder="Type reply..."
-                          />
-                          <button
-                            onClick={() => handleReply(msg.id)}
-                            className="px-3 py-1 rounded-md bg-blue-600 text-white text-sm"
-                          >
-                            Send
-                          </button>
-                          <button
-                            onClick={() => {
-                              setReplyingTo(null);
-                              setReplyText('');
-                            }}
-                            className="px-3 py-1 rounded-md bg-gray-300 text-sm"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        !msg.reply && (
-                          <button
-                            onClick={() => setReplyingTo(msg.id)}
-                            className="px-3 py-1 rounded-md bg-green-600 text-white text-sm"
-                          >
-                            Reply
-                          </button>
-                        )
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {totalPages > 1 && (
-          <div className="flex justify-center mt-4 gap-2">
-            {Array.from({ length: totalPages }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => loadMessages(i + 1)}
-                className={`px-3 py-1 rounded-md text-sm ${
-                  pagination.page === i + 1
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
-          </div>
+          <DataTable 
+            data={messages} 
+            columns={columns} 
+            emptyMessage="All clear! No pending support requests."
+          />
         )}
       </div>
+
+      <Modal
+        isOpen={!!selectedMessage}
+        onClose={() => setSelectedMessage(null)}
+        title={selectedMessage?.reply ? "Ticket Resolution Log" : "Reply to Customer"}
+      >
+        {selectedMessage && (
+          <div className="space-y-6">
+            <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-100 dark:border-zinc-800">
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Customer Inquiry</p>
+              <p className="text-sm font-medium text-zinc-900 dark:text-white leading-relaxed italic">
+                "{selectedMessage.message}"
+              </p>
+            </div>
+
+            {selectedMessage.reply ? (
+              <div className="bg-zinc-950 dark:bg-white p-4 rounded-xl shadow-lg">
+                <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2">Administrative Reply</p>
+                <p className="text-sm font-medium text-white dark:text-zinc-950 leading-relaxed">
+                  {selectedMessage.reply}
+                </p>
+                <div className="mt-4 flex items-center gap-1.5 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Sent {new Date(selectedMessage.replied_at || Date.now()).toLocaleDateString()}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest px-1">Resolution Message</label>
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    className="w-full h-32 p-4 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all dark:text-zinc-100 resize-none"
+                    placeholder="Type your response to the customer..."
+                  />
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <Button variant="secondary" onClick={() => setSelectedMessage(null)}>Cancel</Button>
+                  <Button onClick={handleReply} loading={isSending}>
+                    <Reply className="w-4 h-4 mr-2" />
+                    Send Resolution
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
-*/
