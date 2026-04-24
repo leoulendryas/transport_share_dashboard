@@ -15,6 +15,7 @@ export interface User {
   driving_license_url?: string;
   age?: number;
   gender?: string;
+  profile_photo?: string;
   profile_image_url?: string;
   verification_submitted_at?: string;
   preferred_bank?: string;

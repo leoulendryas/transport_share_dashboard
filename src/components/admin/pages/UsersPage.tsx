@@ -21,9 +21,10 @@ import {
   XCircle,
   Hash,
   AlertCircle,
-  Clock,
   Activity,
-  Key
+  Key,
+  ExternalLink,
+  Info
 } from 'lucide-react';
 import { getUsers, toggleAdminStatus, getUserById, updateMemberLevel, banUser, unbanUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -269,8 +270,12 @@ export default function UsersPage() {
         ) : detailedUser ? (
           <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="flex items-center gap-5">
-              <div className="w-20 h-20 rounded-3xl bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 flex items-center justify-center text-2xl font-black shadow-2xl shadow-zinc-200 dark:shadow-none">
-                {detailedUser.first_name?.[0]}{detailedUser.last_name?.[0]}
+              <div className="w-20 h-20 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xl font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                {detailedUser.profile_photo ? (
+                  <img src={detailedUser.profile_photo} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  `${detailedUser.first_name?.[0]}${detailedUser.last_name?.[0]}`
+                )}
               </div>
               <div className="space-y-1">
                 <h3 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tighter">{detailedUser.first_name} {detailedUser.last_name}</h3>
@@ -397,6 +402,34 @@ export default function UsersPage() {
 
             <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Info className="w-3.5 h-3.5" /> ID Credential Evidence
+              </h4>
+               <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-900 rounded-[2rem] border-2 border-zinc-200 dark:border-zinc-800 shadow-2xl shadow-zinc-200 dark:shadow-none group">
+                 {detailedUser.id_image_url ? (
+                   <img src={detailedUser.id_image_url} alt="ID Evidence" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                 ) : (
+                   <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400 gap-4">
+                     <AlertCircle className="w-12 h-12 opacity-10" />
+                     <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 text-center px-10">ID evidence not found in secure storage</p>
+                   </div>
+                 )}
+                 {detailedUser.id_image_url && (
+                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                      <a 
+                        href={detailedUser.id_image_url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="px-6 py-3 bg-white text-zinc-950 rounded-2xl shadow-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-transform"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Open Original Evidence
+                      </a>
+                   </div>
+                 )}
+               </div>
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 <Car className="w-3.5 h-3.5" /> Registered Assets ({detailedUser.vehicles?.length || 0})
               </h4>
               <div className="space-y-2">
@@ -404,7 +437,7 @@ export default function UsersPage() {
                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No assets linked to node</p>
                 ) : detailedUser.vehicles?.map(v => (
                   <div key={v.id} className="p-4 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex items-center gap-4 shadow-sm">
-                    <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                    <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700">
                       <Car className="w-4 h-4 text-zinc-900 dark:text-white" />
                     </div>
                     <div className="flex-1">
@@ -423,7 +456,7 @@ export default function UsersPage() {
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 <Activity className="w-3.5 h-3.5" /> Active Trajectories ({detailedUser.recentRides?.length || 0})
               </h4>
-              <div className="space-y-3">
+              <div className="space-y-3 pb-10">
                  {detailedUser.recentRides?.length === 0 ? (
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No mission history</p>
                  ) : detailedUser.recentRides?.map(ride => (
@@ -435,31 +468,6 @@ export default function UsersPage() {
                       <Badge variant={ride.status === 'completed' ? 'success' : 'zinc'}>{ride.status}</Badge>
                    </div>
                  ))}
-              </div>
-            </div>
-
-            <div className="space-y-6 pt-6 border-t border-zinc-100 dark:border-zinc-900">
-              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Star className="w-3.5 h-3.5" /> Reputation Log
-              </h4>
-              <div className="space-y-6 pb-10">
-                {detailedUser.recentReviews?.length === 0 ? (
-                   <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No reputation data found</p>
-                ) : detailedUser.recentReviews?.map(r => (
-                  <div key={r.id} className="space-y-2 group">
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className={`w-2.5 h-2.5 ${i < r.rating ? 'fill-zinc-950 text-zinc-950 dark:fill-white dark:text-white' : 'text-zinc-200 dark:text-zinc-800'}`} />
-                        ))}
-                      </div>
-                      <span className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">SENT BY: {r.reviewer_name || 'ANON'} • {new Date(r.created_at).toLocaleDateString()}</span>
-                    </div>
-                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 group-hover:border-zinc-300 dark:group-hover:border-zinc-700 transition-colors">
-                       <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed font-medium italic">"{r.comment}"</p>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
