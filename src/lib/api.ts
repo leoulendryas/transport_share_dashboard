@@ -127,7 +127,7 @@ export const rejectVerification = async (userId: number, reason?: string): Promi
   return handleResponse(response);
 };
 
-export const getPendingLicenses = async (page: number = 1, limit: number = 10): Promise<User[]> => {
+export const getPendingLicenses = async (page: number = 1, limit: number = 10): Promise<{ results: User[]; pagination: { page: number; limit: number; total: number } }> => {
   const response = await adminApi.get('/licenses', { params: { page, limit } });
   return handleResponse(response);
 };
@@ -142,7 +142,7 @@ export const rejectLicense = async (userId: number, reason: string): Promise<{ m
   return handleResponse(response);
 };
 
-export const getPendingVehicles = async (page: number = 1, limit: number = 10): Promise<Vehicle[]> => {
+export const getPendingVehicles = async (page: number = 1, limit: number = 10): Promise<{ results: Vehicle[]; pagination: { page: number; limit: number; total: number } }> => {
   const response = await adminApi.get('/vehicles/pending', { params: { page, limit } });
   return handleResponse(response);
 };
