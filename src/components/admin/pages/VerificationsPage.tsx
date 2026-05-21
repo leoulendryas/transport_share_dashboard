@@ -23,6 +23,7 @@ import {
   verifyUserID,
   rejectVerification,
   approveLicense,
+  rejectLicense,
   approveVehicle,
   rejectVehicle
 } from '@/lib/api';
@@ -31,12 +32,15 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useNotifications } from '@/context/NotificationContext';
 
 type TabType = 'id' | 'license' | 'vehicles';
 
 export default function VerificationsPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [activeTab, setActiveTab] = useState<TabType>('id');
   const [idVerifications, setIdVerifications] = useState<User[]>([]);
   const [licenseVerifications, setLicenseVerifications] = useState<User[]>([]);
@@ -44,6 +48,8 @@ export default function VerificationsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: TabType | null, id: number | null }>({ open: false, type: null, id: null });
+  const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
     if (admin) {
@@ -72,28 +78,56 @@ export default function VerificationsPage() {
   };
 
   const handleAction = async (type: 'approve' | 'reject', itemType: TabType, id: number) => {
-    let reason = '';
     if (type === 'reject') {
-      reason = window.prompt('Provide a detailed reason for rejection. This will be logged and sent to the user:') || '';
-      if (reason === null) return;
+      setRejectionModal({ open: true, type: itemType, id });
+      return;
     }
 
     setIsActionLoading(true);
     try {
       if (itemType === 'id') {
-        if (type === 'approve') await verifyUserID(id);
-        else await rejectVerification(id, reason);
+        await verifyUserID(id);
       } else if (itemType === 'license') {
-        if (type === 'approve') await approveLicense(id);
-        else await rejectVerification(id, reason); // Backend uses same rejection endpoint for id/license in some logic, or it clears URL
+        await approveLicense(id);
       } else if (itemType === 'vehicles') {
-        if (type === 'approve') await approveVehicle(id);
-        else await rejectVehicle(id, reason);
+        await approveVehicle(id);
       }
+      addNotification('success', 'Action Executed', `${itemType} protocol authorized successfully.`);
       setSelectedItem(null);
       fetchData();
     } catch (error) {
-      alert(`Failed to ${type} ${itemType}`);
+      addNotification('warning', 'Action Failed', `Failed to authorize ${itemType} protocol.`);
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const submitRejection = async () => {
+    if (!rejectionReason.trim()) {
+      addNotification('warning', 'Missing Feedback', 'Please provide a reason for rejection.');
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      const { type, id } = rejectionModal;
+      if (!id || !type) return;
+
+      if (type === 'id') {
+        await rejectVerification(id, rejectionReason);
+      } else if (type === 'license') {
+        await rejectLicense(id, rejectionReason);
+      } else if (type === 'vehicles') {
+        await rejectVehicle(id, rejectionReason);
+      }
+      
+      addNotification('success', 'Protocol Terminated', `${type} protocol has been rejected.`);
+      setRejectionModal({ open: false, type: null, id: null });
+      setRejectionReason('');
+      setSelectedItem(null);
+      fetchData();
+    } catch (error) {
+      addNotification('warning', 'Action Failed', `Failed to terminate ${rejectionModal.type} protocol.`);
     } finally {
       setIsActionLoading(false);
     }
@@ -363,6 +397,57 @@ export default function VerificationsPage() {
           </div>
         )}
       </Drawer>
+
+      <Modal
+        isOpen={rejectionModal.open}
+        onClose={() => {
+          setRejectionModal({ open: false, type: null, id: null });
+          setRejectionReason('');
+        }}
+        title="Protocol Termination Reason"
+      >
+        <div className="space-y-6">
+          <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-2xl border border-red-100 dark:border-red-900/30">
+            <p className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+              <AlertCircle className="w-3 h-3" /> Mandatory Feedback
+            </p>
+            <p className="text-xs text-red-700 dark:text-red-300 font-medium leading-relaxed">
+              Specify the reason for rejecting this {rejectionModal.type} protocol. This message will be sent to the user and logged in the system audit trail.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Rejection Reason</label>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g. The uploaded document is blurred and the expiration date is unreadable."
+              className="w-full h-32 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setRejectionModal({ open: false, type: null, id: null });
+                setRejectionReason('');
+              }}
+              className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest"
+            >
+              Abort
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={submitRejection}
+              disabled={isActionLoading || !rejectionReason.trim()}
+              className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-200 dark:shadow-none"
+            >
+              {isActionLoading ? <LoadingSpinner /> : 'Confirm Termination'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
