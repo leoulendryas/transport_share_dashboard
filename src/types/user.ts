@@ -25,12 +25,28 @@ export interface User {
   failed_login_attempts?: number;
   lockout_until?: string;
   rejection_reason?: string;
+  suspended_until?: string | null;
+  suspension_reason?: string | null;
+  oauth_provider?: string | null;
+  oauth_id?: string | null;
+  bio?: string | null;
+  social_vibe?: number;
+  chattiness_pref?: number;
+  music_pref?: number;
+  smoking_pref?: number;
+  pets_pref?: number;
+  cancellation_count?: number;
+  is_driver?: boolean;
 }
 
 export interface DetailedUser extends User {
   vehicles: Vehicle[];
   recentReviews: Review[];
   recentRides: Ride[];
+  intelligence_audit?: {
+    potential_conflicts: any[];
+    has_suspicious_cancellations: boolean;
+  };
 }
 
 export interface AdminLoginResponse {

@@ -341,9 +341,32 @@ export default function VerificationsPage() {
                       <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Asset Color</p>
                       <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase">{selectedItem.color}</p>
                     </div>
-                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 col-span-2">
+                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                       <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Production Year</p>
                       <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">{selectedItem.year || 'UNKNOWN'}</p>
+                    </div>
+                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Company Protocol</p>
+                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">COMP_{selectedItem.company_id || 'NONE'}</p>
+                    </div>
+                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Temporal Marker</p>
+                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">
+                        {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleDateString() : 'UNKNOWN'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Reg Status</p>
+                      <p className="text-sm font-black text-zinc-950 dark:text-white uppercase">{selectedItem.verification_status}</p>
+                    </div>
+                    <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 col-span-2">
+                       <div className="flex items-center gap-4">
+                          <Mail className="w-4 h-4 text-zinc-400" />
+                          <div>
+                             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Owner Uplink</p>
+                             <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{selectedItem.owner_email}</p>
+                          </div>
+                       </div>
                     </div>
                   </>
                 ) : (

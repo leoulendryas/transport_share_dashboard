@@ -26,18 +26,48 @@ import {
   ExternalLink,
   Info
 } from 'lucide-react';
-import { getUsers, toggleAdminStatus, getUserById, updateMemberLevel, banUser, unbanUser } from '@/lib/api';
+import { 
+  getUsers, 
+  toggleAdminStatus, 
+  getUserById, 
+  updateMemberLevel, 
+  banUser, 
+  unbanUser,
+  verifyUserID,
+  rejectVerification,
+  approveLicense,
+  rejectLicense,
+  approveVehicle,
+  rejectVehicle,
+  unsuspendUser
+} from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
-const MemberLevels = ['standard', 'silver', 'gold', 'platinum'];
+const MemberLevels = ['Newcomer', 'Standard', 'Premium', 'Elite'];
+
+const getMemberLevelColor = (level?: string) => {
+  switch (level?.toLowerCase()) {
+    case 'newcomer': return 'bg-zinc-100 text-zinc-500';
+    case 'standard': return 'bg-blue-50 text-blue-600';
+    case 'premium': return 'bg-amber-50 text-amber-600';
+    case 'elite': return 'bg-purple-50 text-purple-600';
+    default: return 'bg-zinc-100 text-zinc-500';
+  }
+};
+
+const isCurrentlySuspended = (user: User): boolean =>
+  user.suspended_until !== null && user.suspended_until !== undefined && new Date(user.suspended_until) > new Date();
 
 export default function UsersPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,6 +76,8 @@ export default function UsersPage() {
   const [detailedUser, setDetailedUser] = useState<DetailedUser | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: 'id' | 'license' | 'vehicle', id: number | null }>({ open: false, type: 'id', id: null });
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const fetchUsers = async () => {
     if (!admin) return;
@@ -54,7 +86,7 @@ export default function UsersPage() {
       const data = await getUsers(1, 100, searchTerm || undefined, filterBanned === 'all' ? undefined : filterBanned === 'banned');
       setUsers(data.results);
     } catch (error) {
-      console.error('Failed to fetch users');
+      addNotification('warning', 'Sync Failed', 'Unable to retrieve user directory.');
     } finally {
       setLoading(false);
     }
@@ -78,7 +110,7 @@ export default function UsersPage() {
       const data = await getUserById(userId);
       setDetailedUser(data);
     } catch (error) {
-      console.error('Failed to fetch user details');
+      addNotification('warning', 'Access Denied', 'Failed to retrieve deep profile data.');
     } finally {
       setLoadingDetails(false);
     }
@@ -89,12 +121,13 @@ export default function UsersPage() {
     setIsUpdating(true);
     try {
       await toggleAdminStatus(user.id, !user.is_admin);
+      addNotification('success', 'Permissions Updated', `${user.first_name}'s administrative status changed.`);
       if (detailedUser && detailedUser.id === user.id) {
         setDetailedUser({ ...detailedUser, is_admin: !user.is_admin });
       }
       fetchUsers();
     } catch (error) {
-      alert('Failed to update admin status');
+      addNotification('warning', 'Update Failed', 'Failed to synchronize permissions.');
     } finally {
       setIsUpdating(false);
     }
@@ -106,18 +139,79 @@ export default function UsersPage() {
     try {
       if (user.banned) {
         await unbanUser(user.id);
+        addNotification('success', 'Node Restored', `${user.first_name}'s access has been reactivated.`);
         if (detailedUser && detailedUser.id === user.id) {
           setDetailedUser({ ...detailedUser, banned: false });
         }
       } else {
         await banUser(user.id);
+        addNotification('success', 'Node Suspended', `${user.first_name}'s access has been terminated.`);
         if (detailedUser && detailedUser.id === user.id) {
           setDetailedUser({ ...detailedUser, banned: true });
         }
       }
       fetchUsers();
     } catch (error) {
-      alert('Failed to update ban status');
+      addNotification('warning', 'State Update Failed', 'Failed to synchronize node status.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleUnsuspend = async (userId: number) => {
+    if (!admin) return;
+    setIsUpdating(true);
+    try {
+      await unsuspendUser(userId);
+      addNotification('success', 'Suspension Lifted', 'User suspension has been cleared.');
+      if (detailedUser && detailedUser.id === userId) {
+        setDetailedUser({ ...detailedUser, suspended_until: null, suspension_reason: null });
+      }
+      fetchUsers();
+    } catch (error) {
+      addNotification('warning', 'Update Failed', 'Failed to clear suspension.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleApprove = async (type: 'id' | 'license' | 'vehicle', id: number) => {
+    if (!admin) return;
+    setIsUpdating(true);
+    try {
+      if (type === 'id') await verifyUserID(id);
+      else if (type === 'license') await approveLicense(id);
+      else if (type === 'vehicle') await approveVehicle(id);
+      
+      addNotification('success', 'Protocol Authorized', `${type.toUpperCase()} evidence approved.`);
+      if (selectedUserId) fetchUserDetails(selectedUserId);
+      fetchUsers();
+    } catch (error) {
+      addNotification('warning', 'Auth Failure', `Failed to authorize ${type}.`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleReject = (type: 'id' | 'license' | 'vehicle', id: number) => {
+    setRejectionModal({ open: true, type, id });
+  };
+
+  const submitRejection = async () => {
+    if (!admin || !rejectionModal.id || !rejectionReason.trim()) return;
+    setIsUpdating(true);
+    try {
+      if (rejectionModal.type === 'id') await rejectVerification(rejectionModal.id, rejectionReason);
+      else if (rejectionModal.type === 'license') await rejectLicense(rejectionModal.id, rejectionReason);
+      else if (rejectionModal.type === 'vehicle') await rejectVehicle(rejectionModal.id, rejectionReason);
+      
+      addNotification('success', 'Protocol Terminated', `${rejectionModal.type.toUpperCase()} evidence rejected.`);
+      setRejectionModal({ open: false, type: 'id', id: null });
+      setRejectionReason('');
+      if (selectedUserId) fetchUserDetails(selectedUserId);
+      fetchUsers();
+    } catch (error) {
+      addNotification('warning', 'Action Failed', 'Failed to submit rejection protocol.');
     } finally {
       setIsUpdating(false);
     }
@@ -155,18 +249,33 @@ export default function UsersPage() {
       header: 'User Profile',
       accessor: (user: User) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[11px] font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800">
-            {user.first_name?.[0]}{user.last_name?.[0]}
+          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[11px] font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            {user.profile_photo ? (
+              <img src={user.profile_photo} alt="P" className="w-full h-full object-cover" />
+            ) : (
+              `${user.first_name?.[0] || '?'}${user.last_name?.[0] || '?'}`
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-zinc-900 dark:text-zinc-100">{user.first_name} {user.last_name}</span>
+              <span className="font-bold text-zinc-900 dark:text-zinc-100">{user.first_name || user.email.split('@')[0]} {user.last_name}</span>
               {user.is_admin && <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-zinc-950 text-white border-none">ADMIN</Badge>}
+              {user.is_driver && <Car className="w-3 h-3 text-blue-500" />}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-               <span className="text-[10px] text-zinc-400 font-mono font-bold tracking-tighter">ID: {user.id}</span>
+               <span className="text-[10px] text-zinc-400 font-mono font-bold tracking-tighter">NODE_{user.id}</span>
                <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-               <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">{user.member_level || 'standard'}</span>
+               <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${getMemberLevelColor(user.member_level)}`}>
+                 {user.member_level || 'Newcomer'}
+               </span>
+               {user.oauth_provider === 'google' && (
+                 <div className="flex items-center gap-1 ml-1">
+                   <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+                   <div className="w-3 h-3 bg-white border border-zinc-200 rounded-full flex items-center justify-center">
+                     <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+                   </div>
+                 </div>
+               )}
             </div>
           </div>
         </div>
@@ -184,6 +293,10 @@ export default function UsersPage() {
              <div className={`w-1.5 h-1.5 rounded-full ${user.id_verified ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">Identity</span>
           </div>
+          <div className="flex items-center gap-1.5">
+             <div className={`w-1.5 h-1.5 rounded-full ${user.license_verified ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+             <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">License</span>
+          </div>
         </div>
       )
     },
@@ -191,18 +304,31 @@ export default function UsersPage() {
       header: 'Activity',
       accessor: (user: User) => (
         <div className="flex flex-col">
-          <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100">Joined: {new Date(user.created_at).toLocaleDateString()}</span>
-          <span className="text-[10px] text-zinc-400 font-medium">Last: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 tabular-nums uppercase tracking-tight">Seen: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'VOID'}</span>
+            {user.cancellation_count && user.cancellation_count > 5 && (
+              <AlertCircle className="w-3 h-3 text-amber-500" />
+            )}
+          </div>
+          <span className="text-[10px] text-zinc-400 font-medium">Joined: {new Date(user.created_at).toLocaleDateString()}</span>
         </div>
       )
     },
     {
       header: 'Status',
-      accessor: (user: User) => (
-        <Badge variant={user.banned ? 'error' : 'success'}>
-          {user.banned ? 'Suspended' : 'Active'}
-        </Badge>
-      )
+      accessor: (user: User) => {
+        const suspended = isCurrentlySuspended(user);
+        return (
+          <div className="flex flex-col gap-1 items-start">
+            <Badge variant={user.banned ? 'error' : suspended ? 'warning' : 'success'}>
+              {user.banned ? 'Terminated' : suspended ? 'Suspended' : 'Synchronized'}
+            </Badge>
+            {suspended && (
+              <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest">Until {new Date(user.suspended_until!).toLocaleDateString()}</span>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: '',
@@ -270,23 +396,51 @@ export default function UsersPage() {
         ) : detailedUser ? (
           <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="flex items-center gap-5">
-              <div className="w-20 h-20 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xl font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+              <div className="w-20 h-20 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xl font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
                 {detailedUser.profile_photo ? (
                   <img src={detailedUser.profile_photo} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
-                  `${detailedUser.first_name?.[0]}${detailedUser.last_name?.[0]}`
+                  `${detailedUser.first_name?.[0] || '?'}${detailedUser.last_name?.[0] || '?'}`
+                )}
+                {detailedUser.oauth_provider === 'google' && (
+                  <div className="absolute bottom-1 right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm border border-zinc-100">
+                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full" />
+                  </div>
                 )}
               </div>
               <div className="space-y-1">
-                <h3 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tighter">{detailedUser.first_name} {detailedUser.last_name}</h3>
+                <h3 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tighter">{detailedUser.first_name || detailedUser.email.split('@')[0]} {detailedUser.last_name}</h3>
                 <div className="flex items-center gap-2">
-                  <Badge variant={detailedUser.banned ? 'error' : 'success'}>
-                    {detailedUser.banned ? 'Suspended' : 'Active Account'}
+                  <Badge variant={detailedUser.banned ? 'error' : isCurrentlySuspended(detailedUser) ? 'warning' : 'success'}>
+                    {detailedUser.banned ? 'Terminated Account' : isCurrentlySuspended(detailedUser) ? 'Suspended Node' : 'Active Account'}
                   </Badge>
                   <span className="text-[10px] font-mono font-black text-zinc-400 uppercase">NODE_{detailedUser.id}</span>
                 </div>
               </div>
             </div>
+
+            {isCurrentlySuspended(detailedUser) && (
+               <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-2 border-amber-100 dark:border-amber-900/50 rounded-3xl space-y-4">
+                  <div className="flex items-start gap-4">
+                     <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-amber-600">
+                        <AlertCircle className="w-5 h-5" />
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Active Suspension</p>
+                        <p className="text-sm font-bold text-zinc-950 dark:text-white">Ends: {new Date(detailedUser.suspended_until!).toLocaleString()}</p>
+                        <p className="text-xs text-zinc-500 mt-1 font-medium">{detailedUser.suspension_reason || 'No reason provided'}</p>
+                     </div>
+                  </div>
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => handleUnsuspend(detailedUser.id)}
+                    disabled={isUpdating}
+                    className="w-full h-10 text-[10px] font-black uppercase tracking-widest bg-white dark:bg-zinc-900"
+                  >
+                    Lift Suspension
+                  </Button>
+               </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <Button
@@ -309,24 +463,31 @@ export default function UsersPage() {
               </Button>
             </div>
 
-            {detailedUser.failed_login_attempts && detailedUser.failed_login_attempts > 0 && (
-               <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-rose-500" />
-                  <div>
-                     <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Security Alert</p>
-                     <p className="text-xs font-bold text-rose-500">{detailedUser.failed_login_attempts} Failed Login Attempts recorded</p>
-                     {detailedUser.lockout_until && new Date(detailedUser.lockout_until) > new Date() && (
-                        <p className="text-[10px] text-rose-600 dark:text-rose-400 mt-1 font-black">LOCKED UNTIL: {new Date(detailedUser.lockout_until).toLocaleString()}</p>
-                     )}
-                  </div>
-               </div>
+            {detailedUser.intelligence_audit && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Intelligence Audit</p>
+                <div className="grid grid-cols-1 gap-3">
+                  {detailedUser.intelligence_audit.has_suspicious_cancellations && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-amber-500" />
+                      <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">High cancellation rate detected (&gt;5)</p>
+                    </div>
+                  )}
+                  {detailedUser.intelligence_audit.potential_conflicts.length > 0 && (
+                    <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-center gap-3">
+                      <ShieldAlert className="w-5 h-5 text-rose-500" />
+                      <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Suspicious overlapping bookings detected</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             <div className="space-y-6">
                <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-6">
                   <div className="flex items-start gap-4">
                      <Mail className="w-4 h-4 text-zinc-400 mt-1" />
-                     <div>
+                     <div className="flex-1">
                         <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Email Protocol</p>
                         <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{detailedUser.email}</p>
                         <div className="flex items-center gap-1.5 mt-1.5">
@@ -336,13 +497,15 @@ export default function UsersPage() {
                      </div>
                   </div>
 
-                  <div className="flex items-start gap-4">
-                     <Phone className="w-4 h-4 text-zinc-400 mt-1" />
-                     <div>
-                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Mobile Uplink</p>
-                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{detailedUser.phone_number || 'STATIONARY_NODE'}</p>
-                     </div>
-                  </div>
+                  {detailedUser.phone_number && (
+                    <div className="flex items-start gap-4">
+                       <Phone className="w-4 h-4 text-zinc-400 mt-1" />
+                       <div>
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Mobile Uplink</p>
+                          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{detailedUser.phone_number}</p>
+                       </div>
+                    </div>
+                  )}
 
                   <div className="flex items-start gap-4">
                      <Hash className="w-4 h-4 text-zinc-400 mt-1" />
@@ -351,6 +514,16 @@ export default function UsersPage() {
                         <p className="text-sm font-mono font-black text-zinc-900 dark:text-zinc-100">#{detailedUser.id}</p>
                      </div>
                   </div>
+
+                  {detailedUser.bio && (
+                    <div className="flex items-start gap-4">
+                       <Info className="w-4 h-4 text-zinc-400 mt-1" />
+                       <div>
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Bio / Intel</p>
+                          <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-relaxed italic">"{detailedUser.bio}"</p>
+                       </div>
+                    </div>
+                  )}
                </div>
 
                <div className="grid grid-cols-2 gap-4">
@@ -358,12 +531,12 @@ export default function UsersPage() {
                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Member Level</p>
                      <select
                         disabled={isUpdating}
-                        value={detailedUser.member_level || 'standard'}
+                        value={detailedUser.member_level || 'Newcomer'}
                         onChange={(e) => handleMemberLevelChange(detailedUser.id, e.target.value)}
-                        className="w-full bg-transparent text-xs font-black text-zinc-950 dark:text-white uppercase tracking-wider outline-none cursor-pointer"
+                        className={`w-full bg-transparent text-xs font-black uppercase tracking-wider outline-none cursor-pointer ${getMemberLevelColor(detailedUser.member_level)} px-2 py-1 rounded-lg`}
                      >
                         {MemberLevels.map(level => (
-                           <option key={level} value={level} className="bg-white dark:bg-zinc-950">{level}</option>
+                           <option key={level} value={level} className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white">{level}</option>
                         ))}
                      </select>
                   </div>
@@ -401,9 +574,16 @@ export default function UsersPage() {
             </div>
 
             <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
-              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Info className="w-3.5 h-3.5" /> ID Credential Evidence
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5" /> ID Credential Evidence
+                </h4>
+                {detailedUser.id_verified ? (
+                  <Badge variant="success" className="text-[8px] h-4">VERIFIED</Badge>
+                ) : (
+                  <Badge variant="warning" className="text-[8px] h-4">PENDING</Badge>
+                )}
+              </div>
                <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-900 rounded-[2rem] border-2 border-zinc-200 dark:border-zinc-800 shadow-2xl shadow-zinc-200 dark:shadow-none group">
                  {detailedUser.id_image_url ? (
                    <img src={detailedUser.id_image_url} alt="ID Evidence" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
@@ -426,33 +606,168 @@ export default function UsersPage() {
                    </div>
                  )}
                </div>
+               {detailedUser.rejection_reason && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/50 rounded-xl">
+                    <p className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Previous Rejection Protocol</p>
+                    <p className="text-[10px] font-bold text-rose-500">{detailedUser.rejection_reason}</p>
+                  </div>
+               )}
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Driving License Protocol
+                </h4>
+                {detailedUser.license_verified ? (
+                  <Badge variant="success" className="text-[8px] h-4">VERIFIED</Badge>
+                ) : (
+                  <Badge variant="warning" className="text-[8px] h-4">PENDING</Badge>
+                )}
+              </div>
+               <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-900 rounded-[2rem] border-2 border-zinc-200 dark:border-zinc-800 shadow-2xl shadow-zinc-200 dark:shadow-none group">
+                 {detailedUser.driving_license_url ? (
+                   <img src={detailedUser.driving_license_url} alt="License Evidence" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                 ) : (
+                   <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400 gap-4">
+                     <AlertCircle className="w-12 h-12 opacity-10" />
+                     <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 text-center px-10">License evidence not found in secure storage</p>
+                   </div>
+                 )}
+                 {detailedUser.driving_license_url && (
+                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                      <a 
+                        href={detailedUser.driving_license_url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="px-6 py-3 bg-white text-zinc-950 rounded-2xl shadow-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-transform"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Open Original Evidence
+                      </a>
+                   </div>
+                 )}
+               </div>
+               {!detailedUser.license_verified && detailedUser.driving_license_url && (
+                  <div className="flex gap-2">
+                    <Button onClick={() => handleApprove('license', detailedUser.id)} disabled={isUpdating} size="sm" className="flex-1 text-[9px] font-black uppercase tracking-widest h-10">Authorize License</Button>
+                    <Button variant="destructive" onClick={() => handleReject('license', detailedUser.id)} disabled={isUpdating} size="sm" className="flex-1 text-[9px] font-black uppercase tracking-widest h-10">Terminate License</Button>
+                  </div>
+               )}
             </div>
 
             <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 <Car className="w-3.5 h-3.5" /> Registered Assets ({detailedUser.vehicles?.length || 0})
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {detailedUser.vehicles?.length === 0 ? (
                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No assets linked to node</p>
                 ) : detailedUser.vehicles?.map(v => (
-                  <div key={v.id} className="p-4 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 flex items-center gap-4 shadow-sm">
-                    <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700">
-                      <Car className="w-4 h-4 text-zinc-900 dark:text-white" />
+                  <div key={v.id} className="p-4 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-4 shadow-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700">
+                        <Car className="w-4 h-4 text-zinc-900 dark:text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tracking-tight">{v.make} {v.model} ({v.year || '?'})</p>
+                        <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">{v.license_plate} • {v.color}</p>
+                      </div>
+                      <Badge variant={v.is_verified ? 'success' : 'zinc'}>
+                        {v.verification_status || 'PEND'}
+                      </Badge>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tracking-tight">{v.make} {v.model} ({v.year || '?'})</p>
-                      <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">{v.license_plate} • {v.color}</p>
-                    </div>
-                    <Badge variant={v.is_verified ? 'success' : 'zinc'}>
-                      {v.verification_status || 'PEND'}
-                    </Badge>
+                    
+                    {v.registration_doc_url && (
+                      <div className="relative aspect-video rounded-xl overflow-hidden border border-zinc-100 dark:border-zinc-800 group/img">
+                        <img src={v.registration_doc_url} alt="Doc" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                           <a href={v.registration_doc_url} target="_blank" rel="noreferrer" className="p-2 bg-white rounded-lg text-zinc-950 shadow-xl scale-90 group-hover/img:scale-100 transition-transform">
+                             <ExternalLink className="w-4 h-4" />
+                           </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {v.verification_status === 'pending' && (
+                       <div className="flex gap-2">
+                          <Button onClick={() => handleApprove('vehicle', v.id)} disabled={isUpdating} size="sm" className="flex-1 text-[9px] font-black uppercase tracking-widest h-9">Approve Registry</Button>
+                          <Button variant="destructive" onClick={() => handleReject('vehicle', v.id)} disabled={isUpdating} size="sm" className="flex-1 text-[9px] font-black uppercase tracking-widest h-9">Reject Registry</Button>
+                       </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-6 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+            {detailedUser.is_driver && (detailedUser.preferred_bank || detailedUser.bank_account_number) && (
+              <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5" /> Payout Configuration
+                </h4>
+                <div className="p-6 bg-emerald-50/30 dark:bg-emerald-950/10 border-2 border-emerald-100/50 dark:border-emerald-900/20 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Financial Institution</p>
+                      <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{detailedUser.preferred_bank || 'NOT_SPECIFIED'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Account Number</p>
+                    <p className="text-sm font-mono font-black text-zinc-900 dark:text-white tracking-widest">{detailedUser.bank_account_number || 'VOID'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Activity className="w-3.5 h-3.5" /> Behavioral Preferences
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                 {[
+                   { label: 'Social Vibe', value: detailedUser.social_vibe },
+                   { label: 'Chattiness', value: detailedUser.chattiness_pref },
+                   { label: 'Music Pref', value: detailedUser.music_pref },
+                   { label: 'Smoking Pref', value: detailedUser.smoking_pref },
+                   { label: 'Pets Pref', value: detailedUser.pets_pref },
+                 ].map((pref, idx) => (
+                   <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                      <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2">{pref.label}</p>
+                      <div className="flex gap-1">
+                         {[1,2,3,4,5].map(v => (
+                           <div key={v} className={`h-1.5 flex-1 rounded-full ${v <= (pref.value || 3) ? 'bg-zinc-950 dark:bg-white' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
+                         ))}
+                      </div>
+                   </div>
+                 ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Star className="w-3.5 h-3.5" /> Recent Node Evaluations ({detailedUser.recentReviews?.length || 0})
+              </h4>
+              <div className="space-y-3">
+                 {detailedUser.recentReviews?.length === 0 ? (
+                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No evaluations recorded</p>
+                 ) : detailedUser.recentReviews?.map(review => (
+                   <div key={review.id} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] font-black text-zinc-900 dark:text-zinc-100 uppercase">{review.reviewer_name || 'Anonymous'}</p>
+                        <div className="flex items-center gap-0.5">
+                           {Array.from({ length: 5 }).map((_, i) => (
+                             <Star key={i} className={`w-2.5 h-2.5 ${i < review.rating ? 'fill-amber-400 text-amber-400' : 'text-zinc-300'}`} />
+                           ))}
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-medium text-zinc-500 leading-relaxed italic">"{review.comment}"</p>
+                      <p className="text-[8px] text-zinc-400 font-bold mt-2 uppercase tabular-nums">{new Date(review.created_at).toLocaleDateString()}</p>
+                   </div>
+                 ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 <Activity className="w-3.5 h-3.5" /> Active Trajectories ({detailedUser.recentRides?.length || 0})
               </h4>
@@ -473,6 +788,57 @@ export default function UsersPage() {
           </div>
         ) : null}
       </Drawer>
+
+      <Modal
+        isOpen={rejectionModal.open}
+        onClose={() => {
+          setRejectionModal({ open: false, type: 'id', id: null });
+          setRejectionReason('');
+        }}
+        title="Protocol Termination Reason"
+      >
+        <div className="space-y-6">
+          <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-2xl border border-red-100 dark:border-red-900/30">
+            <p className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+              <AlertCircle className="w-3 h-3" /> Mandatory Feedback
+            </p>
+            <p className="text-xs text-red-700 dark:text-red-300 font-medium leading-relaxed">
+              Specify the reason for rejecting this {rejectionModal.type} protocol. This message will be logged in the system audit trail.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Rejection Reason</label>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g. Document is unreadable or expired."
+              className="w-full h-32 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setRejectionModal({ open: false, type: 'id', id: null });
+                setRejectionReason('');
+              }}
+              className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest"
+            >
+              Abort
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={submitRejection}
+              disabled={isUpdating || !rejectionReason.trim()}
+              className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-200 dark:shadow-none"
+            >
+              {isUpdating ? <LoadingSpinner /> : 'Confirm Termination'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
