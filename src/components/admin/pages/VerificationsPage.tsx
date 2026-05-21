@@ -1,7 +1,5 @@
-'use client';
-
 import { useState, useEffect } from 'react';
-import { User, Vehicle } from '@/types/user';
+import { User, Vehicle, Stats } from '@/types/user';
 import { 
   Check, 
   X, 
@@ -14,7 +12,16 @@ import {
   User as UserIcon,
   Phone,
   Mail,
-  Car
+  Car,
+  ShieldAlert,
+  ShieldCheck,
+  Building2,
+  DollarSign,
+  AlertTriangle,
+  Clock,
+  ChevronRight,
+  Fingerprint,
+  RefreshCw
 } from 'lucide-react';
 import { 
   getPendingVerifications, 
@@ -25,7 +32,8 @@ import {
   approveLicense,
   rejectLicense,
   approveVehicle,
-  rejectVehicle
+  rejectVehicle,
+  getDashboardStats
 } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { DataTable } from '@/components/ui/DataTable';
@@ -37,6 +45,37 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useNotifications } from '@/context/NotificationContext';
 
 type TabType = 'id' | 'license' | 'vehicles';
+
+const QUICK_REASONS = [
+  "Image is blurry or unreadable",
+  "Document appears expired",
+  "Document does not match profile information",
+  "Wrong document type uploaded",
+  "Image is partially cut off"
+];
+
+const getWaitingUrgency = (submittedAt: string | null): 'zinc' | 'warning' | 'error' => {
+  if (!submittedAt) return 'zinc';
+  const hoursWaiting = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60);
+  if (hoursWaiting > 48) return 'error';  // red — waiting > 2 days
+  if (hoursWaiting > 24) return 'warning';    // amber — waiting > 1 day
+  return 'zinc';                          // grey — recent
+};
+
+const formatRelativeTime = (dateString: string | null) => {
+  if (!dateString) return 'VOID';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMin < 1) return 'JUST NOW';
+  if (diffMin < 60) return `${diffMin}M AGO`;
+  if (diffHours < 24) return `${diffHours}H AGO`;
+  return `${diffDays}D AGO`;
+};
 
 const formatWaitingTime = (dateString: string | null) => {
   if (!dateString) return 'NEW';
@@ -52,7 +91,8 @@ const formatWaitingTime = (dateString: string | null) => {
 export default function VerificationsPage() {
   const { admin } = useAuth();
   const { addNotification } = useNotifications();
-  const [activeTab, setActiveTab] = useState<TabType>('id');
+  const [activeTab, setActiveTab] = useState<TabType | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [idVerifications, setIdVerifications] = useState<User[]>([]);
   const [licenseVerifications, setLicenseVerifications] = useState<User[]>([]);
   const [vehicleVerifications, setVehicleVerifications] = useState<Vehicle[]>([]);
@@ -62,9 +102,19 @@ export default function VerificationsPage() {
   const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: TabType | null, id: number | null }>({ open: false, type: null, id: null });
   const [rejectionReason, setRejectionReason] = useState('');
 
+  const fetchStats = async () => {
+    try {
+      const data = await getDashboardStats();
+      setStats(data);
+    } catch (error) {
+      console.error('Failed to fetch stats');
+    }
+  };
+
   useEffect(() => {
     if (admin) {
-      fetchData();
+      fetchStats();
+      if (activeTab) fetchData();
     }
   }, [admin, activeTab]);
 
@@ -115,6 +165,7 @@ export default function VerificationsPage() {
       addNotification('success', 'Action Executed', `${itemType} protocol authorized successfully.`);
       setSelectedItem(null);
       fetchData();
+      fetchStats();
     } catch (error) {
       addNotification('warning', 'Action Failed', `Failed to authorize ${itemType} protocol.`);
     } finally {
@@ -146,6 +197,7 @@ export default function VerificationsPage() {
       setRejectionReason('');
       setSelectedItem(null);
       fetchData();
+      fetchStats();
     } catch (error) {
       addNotification('warning', 'Action Failed', `Failed to terminate ${rejectionModal.type} protocol.`);
     } finally {
@@ -158,22 +210,47 @@ export default function VerificationsPage() {
       header: 'Node Identity',
       accessor: (v: User) => (
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[10px] font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800">
-            {v.first_name?.[0]}{v.last_name?.[0]}
+          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[10px] font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
+            {v.profile_photo ? (
+               <img src={v.profile_photo} alt="P" className="w-full h-full object-cover" />
+            ) : (
+               `${v.first_name?.[0] || '?'}${v.last_name?.[0] || '?'}`
+            )}
+            {v.oauth_provider === 'google' && (
+               <div className="absolute bottom-0 right-0 w-3 h-3 bg-white border border-zinc-200 rounded-full flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+               </div>
+            )}
           </div>
           <div>
-            <p className="font-bold text-zinc-900 dark:text-zinc-100">{v.first_name} {v.last_name}</p>
+            <p className="font-bold text-zinc-900 dark:text-zinc-100">{v.first_name || v.email.split('@')[0]} {v.last_name}</p>
             <p className="text-[10px] text-zinc-400 font-mono font-black uppercase">NODE_{v.id}</p>
           </div>
         </div>
       )
     },
     {
-      header: 'Contact Protocol',
+      header: 'Context Flags',
       accessor: (v: User) => (
-        <div className="flex flex-col">
-          <span className="text-zinc-600 dark:text-zinc-400 font-medium">{v.email}</span>
-          <span className="text-[10px] text-zinc-500 font-black tracking-tight">{v.phone_number || 'STATIONARY'}</span>
+        <div className="flex flex-col gap-1">
+           {activeTab === 'id' && v.driving_license_url && !v.license_verified && (
+              <span className="text-[8px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex items-center gap-1">
+                 <ShieldAlert className="w-2.5 h-2.5" /> License Pending
+              </span>
+           )}
+           {activeTab === 'license' && v.id_image_url && !v.id_verified && (
+              <span className="text-[8px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex items-center gap-1">
+                 <ShieldAlert className="w-2.5 h-2.5" /> ID Pending
+              </span>
+           )}
+           {v.rejection_reason && (
+              <span className="text-[8px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest flex items-center gap-1">
+                 <AlertTriangle className="w-2.5 h-2.5" /> Resubmission
+              </span>
+           )}
+           {!v.driving_license_url && !v.id_image_url && (
+              <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">No Flags</span>
+           )}
         </div>
       )
     },
@@ -185,15 +262,11 @@ export default function VerificationsPage() {
             <Calendar className="w-3 h-3" />
             {v.verification_submitted_at ? new Date(v.verification_submitted_at).toLocaleDateString() : 'UNKNOWN'}
           </div>
-          <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-amber-50 text-amber-600 border-amber-100">
+          <Badge variant={getWaitingUrgency(v.verification_submitted_at)} className="h-4 px-1.5 text-[8px] font-black">
              {formatWaitingTime(v.verification_submitted_at)}
           </Badge>
         </div>
       )
-    },
-    {
-      header: 'Status',
-      accessor: () => <Badge variant="warning">Verification Pending</Badge>
     },
     {
       header: '',
@@ -237,8 +310,18 @@ export default function VerificationsPage() {
       )
     },
     {
-      header: 'Status',
-      accessor: () => <Badge variant="warning">Registry Pending</Badge>
+      header: 'Submitted',
+      accessor: (v: Vehicle) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] font-black uppercase tracking-widest tabular-nums">
+            <Calendar className="w-3 h-3" />
+            {v.created_at ? new Date(v.created_at).toLocaleDateString() : 'UNKNOWN'}
+          </div>
+          <Badge variant={getWaitingUrgency(v.created_at)} className="h-4 px-1.5 text-[8px] font-black">
+             {formatWaitingTime(v.created_at)}
+          </Badge>
+        </div>
+      )
     },
     {
       header: '',
@@ -253,25 +336,64 @@ export default function VerificationsPage() {
     }
   ];
 
+  if (!activeTab) {
+    return (
+      <div className="p-8 space-y-10 bg-white dark:bg-zinc-950 min-h-full">
+         <div>
+            <h2 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tighter uppercase">Verification Protocols</h2>
+            <p className="text-xs text-zinc-500 font-medium mt-1">Authorized access to node identification and asset registries.</p>
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { id: 'id', label: 'ID Checks', count: stats?.pendingVerifications?.ids || 0, icon: Fingerprint, color: 'text-blue-500' },
+              { id: 'license', label: 'Licenses', count: stats?.pendingVerifications?.licenses || 0, icon: ShieldCheck, color: 'text-emerald-500' },
+              { id: 'vehicles', label: 'Vehicles', count: stats?.pendingVerifications?.vehicles || 0, icon: Car, color: 'text-purple-500' }
+            ].map((q) => (
+              <button 
+                key={q.id}
+                onClick={() => setActiveTab(q.id as TabType)}
+                className="p-8 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[2rem] text-left hover:border-zinc-400 dark:hover:border-zinc-600 transition-all group relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform duration-500">
+                   <q.icon className="w-24 h-24" />
+                </div>
+                <div className={`w-12 h-12 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 flex items-center justify-center mb-6 shadow-sm ${q.color}`}>
+                   <q.icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-black text-zinc-950 dark:text-white uppercase tracking-tight">{q.label}</h3>
+                <div className="flex items-center justify-between mt-2">
+                   <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">{q.count} PENDING</p>
+                   <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+            ))}
+         </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 space-y-8 bg-white dark:bg-zinc-950 min-h-full">
-      <div className="flex border-b border-zinc-100 dark:border-zinc-900">
-        {(['id', 'license', 'vehicles'] as TabType[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-8 pb-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all relative ${
-              activeTab === tab 
-              ? 'text-zinc-950 dark:text-white' 
-              : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200'
-            }`}
-          >
-            {tab} Protocols
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-8 right-8 h-0.5 bg-zinc-950 dark:bg-white" />
-            )}
-          </button>
-        ))}
+      <div className="flex items-center justify-between">
+         <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={() => setActiveTab(null)} className="h-10 w-10 p-0 rounded-xl">
+               <ChevronRight className="w-4 h-4 rotate-180" />
+            </Button>
+            <div>
+               <h2 className="text-xl font-black text-zinc-950 dark:text-white tracking-tighter uppercase">{activeTab} Protocols</h2>
+               <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">
+                    Queue Length: {activeTab === 'id' ? idVerifications.length : activeTab === 'license' ? licenseVerifications.length : vehicleVerifications.length}
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-zinc-300" />
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Sorted by Oldest-First</span>
+               </div>
+            </div>
+         </div>
+         <Button variant="secondary" size="md" onClick={fetchData} className="rounded-xl h-11 px-4">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+         </Button>
       </div>
 
       <div className="space-y-4">
@@ -310,10 +432,65 @@ export default function VerificationsPage() {
         title="Protocol Interrogation"
       >
         {selectedItem && (
-          <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
+          <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
+            {/* Header info */}
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-lg font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
+                {activeTab === 'vehicles' ? (
+                   <Car className="w-8 h-8" />
+                ) : selectedItem.profile_photo ? (
+                   <img src={selectedItem.profile_photo} alt="P" className="w-full h-full object-cover" />
+                ) : (
+                   `${selectedItem.first_name?.[0] || '?'}${selectedItem.last_name?.[0] || '?'}`
+                )}
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-zinc-950 dark:text-white tracking-tighter uppercase">
+                  {activeTab === 'vehicles' ? `${selectedItem.make} ${selectedItem.model}` : `${selectedItem.first_name} ${selectedItem.last_name}`}
+                </h3>
+                <div className="flex items-center gap-2">
+                   <Badge variant="zinc" className="h-5 px-2 text-[9px] font-black uppercase bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-none">
+                     {activeTab === 'vehicles' ? 'ASSET_NODE' : 'INDIVIDUAL_NODE'}
+                   </Badge>
+                   <span className="text-[10px] font-mono font-black text-zinc-400 uppercase tracking-tighter">ID_{selectedItem.id}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Context Banners */}
             <div className="space-y-2">
-               <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Credential Evidence</p>
-               <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-900 rounded-[2rem] border-2 border-zinc-200 dark:border-zinc-800 shadow-2xl shadow-zinc-200 dark:shadow-none group">
+               {(selectedItem.rejection_reason || selectedItem.verification_notes) && (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                       <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Previous Rejection Protocol</p>
+                       <p className="text-xs font-medium text-amber-700 dark:text-amber-400 italic">"{selectedItem.rejection_reason || selectedItem.verification_notes}"</p>
+                    </div>
+                  </div>
+               )}
+               {activeTab === 'id' && selectedItem.driving_license_url && !selectedItem.license_verified && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 rounded-2xl flex items-center gap-3">
+                    <ShieldAlert className="w-5 h-5 text-blue-600" />
+                    <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Dual Submission: Driving License also pending</p>
+                  </div>
+               )}
+               {activeTab === 'license' && selectedItem.id_image_url && !selectedItem.id_verified && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/50 rounded-2xl flex items-center gap-3">
+                    <ShieldAlert className="w-5 h-5 text-blue-600" />
+                    <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Dual Submission: National ID also pending</p>
+                  </div>
+               )}
+            </div>
+
+            {/* Visual Evidence */}
+            <div className="space-y-4">
+               <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Credential Evidence</p>
+                  <Badge variant={getWaitingUrgency(activeTab === 'vehicles' ? selectedItem.created_at : selectedItem.verification_submitted_at)} className="h-5 px-2 text-[8px] font-black">
+                     SUBMITTED {formatRelativeTime(activeTab === 'vehicles' ? selectedItem.created_at : selectedItem.verification_submitted_at)}
+                  </Badge>
+               </div>
+               <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100 dark:bg-zinc-900 rounded-[2.5rem] border-2 border-zinc-200 dark:border-zinc-800 shadow-2xl shadow-zinc-200 dark:shadow-none group">
                  {activeTab === 'id' && selectedItem.id_image_url ? (
                    <img src={selectedItem.id_image_url} alt="ID Evidence" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                  ) : activeTab === 'license' && selectedItem.driving_license_url ? (
@@ -343,18 +520,6 @@ export default function VerificationsPage() {
             </div>
 
             <div className="space-y-8">
-              <div className="space-y-1">
-                <h3 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tighter uppercase">
-                  {activeTab === 'vehicles' ? `${selectedItem.make} ${selectedItem.model}` : `${selectedItem.first_name} ${selectedItem.last_name}`}
-                </h3>
-                <div className="flex items-center gap-2">
-                   <Badge variant="zinc" className="h-5 px-2 text-[9px] font-black uppercase bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-none">
-                     {activeTab === 'vehicles' ? 'ASSET_NODE' : 'INDIVIDUAL_NODE'}
-                   </Badge>
-                   <span className="text-[10px] font-mono font-black text-zinc-400 uppercase tracking-tighter">ID_{selectedItem.id}</span>
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 {activeTab === 'vehicles' ? (
                   <>
@@ -371,72 +536,76 @@ export default function VerificationsPage() {
                       <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">{selectedItem.year || 'UNKNOWN'}</p>
                     </div>
                     <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Company Protocol</p>
-                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">COMP_{selectedItem.company_id || 'NONE'}</p>
-                    </div>
-                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Temporal Marker</p>
-                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">
-                        {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleDateString() : 'UNKNOWN'}
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Fleet Node</p>
+                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums flex items-center gap-2">
+                         <Building2 className="w-4 h-4" /> {selectedItem.company_id || 'INDIVIDUAL'}
                       </p>
-                    </div>
-                    <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Reg Status</p>
-                      <p className="text-sm font-black text-zinc-950 dark:text-white uppercase">{selectedItem.verification_status}</p>
-                    </div>
-                    <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 col-span-2">
-                       <div className="flex items-center gap-4">
-                          <Mail className="w-4 h-4 text-zinc-400" />
-                          <div>
-                             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Owner Uplink</p>
-                             <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{selectedItem.owner_email}</p>
-                          </div>
-                       </div>
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                       <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Age / Gender</p>
-                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">{selectedItem.age || '??'} • {selectedItem.gender || '??'}</p>
+                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">{selectedItem.age || 'Not provided'} • {selectedItem.gender || 'Not provided'}</p>
                     </div>
                     <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Submission</p>
-                      <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">{selectedItem.verification_submitted_at ? new Date(selectedItem.verification_submitted_at).toLocaleDateString() : 'UNKNOWN'}</p>
-                    </div>
-                    <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 col-span-2 space-y-4">
-                       <div className="flex items-center gap-4">
-                          <Mail className="w-4 h-4 text-zinc-400" />
-                          <div>
-                             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Email Uplink</p>
-                             <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{selectedItem.email}</p>
-                          </div>
-                       </div>
-                       <div className="flex items-center gap-4">
-                          <Phone className="w-4 h-4 text-zinc-400" />
-                          <div>
-                             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Voice Comms</p>
-                             <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{selectedItem.phone_number || 'NOT_CONNECTED'}</p>
-                          </div>
-                       </div>
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Account Tier</p>
+                      <p className="text-sm font-black text-zinc-950 dark:text-white uppercase">{selectedItem.member_level || 'Newcomer'}</p>
                     </div>
                   </>
                 )}
               </div>
 
+              {/* Payout Info if available */}
+              {(selectedItem.preferred_bank || selectedItem.bank_account_number) && (
+                <div className="p-6 bg-emerald-50/30 dark:bg-emerald-950/10 border-2 border-emerald-100/50 dark:border-emerald-900/20 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Target Bank</p>
+                      <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                         <Building2 className="w-4 h-4" /> {selectedItem.preferred_bank}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Account Number</p>
+                    <p className="text-sm font-mono font-black text-zinc-900 dark:text-white tracking-widest">{selectedItem.bank_account_number}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                 <div className="flex items-center gap-4">
+                    <Mail className="w-4 h-4 text-zinc-400" />
+                    <div>
+                       <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Email Uplink</p>
+                       <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{activeTab === 'vehicles' ? selectedItem.owner_email : selectedItem.email}</p>
+                    </div>
+                 </div>
+                 {selectedItem.phone_number && (
+                    <div className="flex items-center gap-4">
+                       <Phone className="w-4 h-4 text-zinc-400" />
+                       <div>
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Voice Comms</p>
+                          <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{selectedItem.phone_number}</p>
+                       </div>
+                    </div>
+                 )}
+              </div>
+
               <div className="flex gap-3 pt-4 pb-10">
                 <Button
-                  onClick={() => handleAction('approve', activeTab, selectedItem.id)}
+                  onClick={() => handleAction('approve', activeTab!, selectedItem.id)}
                   disabled={isActionLoading}
-                  className="flex-1 h-14 rounded-2xl shadow-xl shadow-zinc-200 dark:shadow-none text-[10px] font-black uppercase tracking-[0.2em]"
+                  className="flex-1 h-16 rounded-[1.5rem] shadow-xl shadow-zinc-200 dark:shadow-none text-[10px] font-black uppercase tracking-[0.2em] bg-zinc-950 text-white dark:bg-white dark:text-zinc-950"
                 >
                   <Check className="w-5 h-5 mr-2" /> Authorize
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => handleAction('reject', activeTab, selectedItem.id)}
+                  onClick={() => handleAction('reject', activeTab!, selectedItem.id)}
                   disabled={isActionLoading}
-                  className="flex-1 h-14 rounded-2xl shadow-xl shadow-zinc-200 dark:shadow-none text-[10px] font-black uppercase tracking-[0.2em]"
+                  className="flex-1 h-16 rounded-[1.5rem] shadow-xl shadow-rose-200 dark:shadow-none text-[10px] font-black uppercase tracking-[0.2em]"
                 >
                   <X className="w-5 h-5 mr-2" /> Terminate
                 </Button>
@@ -464,13 +633,32 @@ export default function VerificationsPage() {
             </p>
           </div>
 
+          <div className="space-y-3">
+             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Quick Select Reasons</p>
+             <div className="flex flex-wrap gap-2">
+                {QUICK_REASONS.map(r => (
+                  <button 
+                    key={r}
+                    onClick={() => setRejectionReason(r)}
+                    className={`px-3 py-2 rounded-xl text-[9px] font-bold border transition-all ${
+                      rejectionReason === r 
+                      ? 'bg-zinc-950 text-white border-zinc-950 dark:bg-white dark:text-zinc-950' 
+                      : 'bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+             </div>
+          </div>
+
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Rejection Reason</label>
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1">Custom Rejection Reason</label>
             <textarea
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="e.g. The uploaded document is blurred and the expiration date is unreadable."
-              className="w-full h-32 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all resize-none"
+              placeholder="Provide specific details for the user..."
+              className="w-full h-32 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all resize-none dark:text-white"
             />
           </div>
 
