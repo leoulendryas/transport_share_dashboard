@@ -44,7 +44,7 @@ export default function PaymentsPage() {
       const data = await getPayments(
         currentPage, 
         ITEMS_PER_PAGE, 
-        filter === 'all' ? undefined : filter
+        { status: filter === 'all' ? undefined : filter }
       );
       setPayments(data.results || []);
       setTotal(data.pagination?.total || 0);

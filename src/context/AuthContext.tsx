@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await adminLogin(email, password);
+      const response = await adminLogin({ email }, password);
       
       const adminData: Admin = {
         id: response.user.id,
