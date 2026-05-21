@@ -1,37 +1,26 @@
+// src/components/admin/pages/CompaniesPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { Building2, Plus, Trash2, Search } from 'lucide-react';
-import { getCompanies, createCompany, deleteCompany } from '@/lib/api';
+import { Building2, Plus, Trash2 } from 'lucide-react';
+import { companiesApi } from '@/lib/api/companies';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
-import { Company } from '@/types/user';
+import { Company } from '@/types/admin';
+import { extractError } from '@/lib/api/errors';
 
 export default function CompaniesPage() {
   const { admin } = useAuth();
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const load = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const data = await getCompanies();
-      setCompanies(data);
-    } catch (error) {
-      console.error('Failed to load companies', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, [admin]);
+  const { data: companies = [], mutate, isLoading } = useSWR(
+    admin ? 'companies' : null,
+    () => companiesApi.list()
+  );
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,11 +28,11 @@ export default function CompaniesPage() {
     
     setIsSubmitting(true);
     try {
-      await createCompany(name);
+      await companiesApi.create(name);
       setName('');
-      await load();
-    } catch (error) {
-      alert('Failed to add company');
+      mutate();
+    } catch (err) {
+      alert(extractError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -52,10 +41,10 @@ export default function CompaniesPage() {
   const handleDelete = async (id: number) => {
     if (!admin || !confirm('Are you sure you want to delete this company?')) return;
     try {
-      await deleteCompany(id);
-      await load();
-    } catch (error) {
-      alert('Failed to delete company');
+      await companiesApi.delete(id);
+      mutate();
+    } catch (err) {
+      alert(extractError(err));
     }
   };
 
@@ -74,6 +63,14 @@ export default function CompaniesPage() {
     {
       header: 'ID',
       accessor: (c: Company) => <span className="text-zinc-500 text-xs">#{c.id}</span>
+    },
+    {
+      header: 'Status',
+      accessor: (c: Company) => (
+        <span className={`text-[10px] font-black uppercase tracking-widest ${c.is_active ? 'text-emerald-500' : 'text-zinc-400'}`}>
+          {c.is_active ? 'Active' : 'Inactive'}
+        </span>
+      )
     },
     {
       header: 'Actions',
@@ -110,9 +107,8 @@ export default function CompaniesPage() {
               required 
             />
           </div>
-          <Button type="submit" loading={isSubmitting}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Company
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? <LoadingSpinner size="sm" /> : <><Plus className="w-4 h-4 mr-2" /> Add Company</>}
           </Button>
         </form>
       </div>
@@ -123,18 +119,12 @@ export default function CompaniesPage() {
           <div className="text-xs text-zinc-500 font-medium">Total: {companies.length}</div>
         </div>
         
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <LoadingSpinner />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Loading Directory</span>
-          </div>
-        ) : (
-          <DataTable 
-            data={companies} 
-            columns={columns} 
-            emptyMessage="No partner companies found."
-          />
-        )}
+        <DataTable 
+          data={companies} 
+          columns={columns} 
+          loading={isLoading}
+          emptyMessage="No partner companies found."
+        />
       </div>
     </div>
   );

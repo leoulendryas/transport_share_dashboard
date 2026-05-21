@@ -1,68 +1,52 @@
+// src/components/admin/pages/SosAlertsPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { 
   Bell, 
-  ShieldAlert, 
   Clock, 
   MapPin, 
-  User, 
-  Phone, 
-  CheckCircle2, 
   AlertTriangle,
-  X,
-  MessageSquare,
   ArrowRight,
   Eye,
   Calendar
 } from 'lucide-react';
-import { getSosAlerts, resolveSos } from '@/lib/api';
+import { moderationApi } from '@/lib/api/moderation';
 import { useAuth } from '@/context/AuthContext';
-import { SOSAlert } from '@/types/user';
+import { SOSAlert } from '@/types/admin';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { extractError } from '@/lib/api/errors';
 
 export default function SosAlertsPage() {
   const { admin } = useAuth();
-  const [alerts, setAlerts] = useState<SOSAlert[]>([]);
-  const [loading, setLoading] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<SOSAlert | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchAlerts = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const data = await getSosAlerts();
-      setAlerts(data || []);
-    } catch (error) {
-      console.error('Failed to fetch SOS alerts');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAlerts();
-  }, [admin]);
+  const { data: alerts = [], mutate, isLoading } = useSWR(
+    admin ? 'sos-alerts' : null,
+    () => moderationApi.listSOS(),
+    { refreshInterval: 15000 }
+  );
 
   const handleResolve = async () => {
     if (!admin || !selectedAlert) return;
     setIsSubmitting(true);
     try {
-      await resolveSos(selectedAlert.id, adminNotes);
+      await moderationApi.resolveSOS(selectedAlert.id, { notes: adminNotes });
       setIsResolving(false);
       setSelectedAlert(null);
       setAdminNotes('');
-      fetchAlerts();
-    } catch (error) {
-      alert('Failed to resolve alert');
+      mutate();
+    } catch (err) {
+      alert(extractError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -108,7 +92,7 @@ export default function SosAlertsPage() {
       header: 'Status',
       accessor: (a: SOSAlert) => (
         <Badge variant={a.status === 'active' ? 'error' : 'zinc'}>
-          {a.status}
+          {a.status.toUpperCase()}
         </Badge>
       )
     },
@@ -151,7 +135,7 @@ export default function SosAlertsPage() {
       <DataTable 
         columns={columns} 
         data={alerts} 
-        loading={loading}
+        loading={isLoading}
         onRowClick={(a) => setSelectedAlert(a)}
         emptyMessage="No SOS alerts reported"
       />
@@ -173,7 +157,7 @@ export default function SosAlertsPage() {
               </div>
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Status</p>
               <Badge variant={selectedAlert.status === 'active' ? 'error' : 'zinc'}>
-                {selectedAlert.status}
+                {selectedAlert.status.toUpperCase()}
               </Badge>
             </div>
 
@@ -184,9 +168,9 @@ export default function SosAlertsPage() {
                 <p className="text-[10px] text-red-500 font-black mt-1 tracking-tight">{selectedAlert.phone_number}</p>
               </div>
               <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Location</p>
-                <p className="text-[10px] font-mono font-bold text-zinc-900 dark:text-zinc-100">LAT: {selectedAlert.latitude.toFixed(6)}</p>
-                <p className="text-[10px] font-mono font-bold text-zinc-900 dark:text-zinc-100">LNG: {selectedAlert.longitude.toFixed(6)}</p>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Ride Info</p>
+                <p className="text-[10px] font-mono font-bold text-zinc-900 dark:text-zinc-100 uppercase">RIDE_{selectedAlert.ride_id}</p>
+                <p className="text-[10px] font-mono font-bold text-zinc-900 dark:text-zinc-100 uppercase">STATUS: {selectedAlert.ride_status}</p>
               </div>
             </div>
 

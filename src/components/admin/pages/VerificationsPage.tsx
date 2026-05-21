@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
-import { User, Vehicle, Stats } from '@/types/user';
+import useSWR from 'swr';
+import { 
+  AdminUser as User, 
+  Vehicle, 
+  DashboardStats as Stats 
+} from '@/types/admin';
 import { 
   Check, 
   X, 
@@ -23,18 +28,11 @@ import {
   Fingerprint,
   RefreshCw
 } from 'lucide-react';
-import { 
-  getPendingVerifications, 
-  getPendingLicenses, 
-  getPendingVehicles,
-  verifyUserID,
-  rejectVerification,
-  approveLicense,
-  rejectLicense,
-  approveVehicle,
-  rejectVehicle,
-  getDashboardStats
-} from '@/lib/api';
+import { verificationsApi } from '@/lib/api/verifications';
+import { licensesApi } from '@/lib/api/licenses';
+import { vehiclesApi } from '@/lib/api/vehicles';
+import { dashboardApi } from '@/lib/api/dashboard';
+import { extractError } from '@/lib/api/errors';
 import { useAuth } from '@/context/AuthContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
@@ -54,7 +52,7 @@ const QUICK_REASONS = [
   "Image is partially cut off"
 ];
 
-const getWaitingUrgency = (submittedAt: string | null): 'zinc' | 'warning' | 'error' => {
+const getWaitingUrgency = (submittedAt: string | null | undefined): 'zinc' | 'warning' | 'error' => {
   if (!submittedAt) return 'zinc';
   const hoursWaiting = (Date.now() - new Date(submittedAt).getTime()) / (1000 * 60 * 60);
   if (hoursWaiting > 48) return 'error';  // red — waiting > 2 days
@@ -62,7 +60,7 @@ const getWaitingUrgency = (submittedAt: string | null): 'zinc' | 'warning' | 'er
   return 'zinc';                          // grey — recent
 };
 
-const formatRelativeTime = (dateString: string | null) => {
+const formatRelativeTime = (dateString: string | null | undefined) => {
   if (!dateString) return 'VOID';
   const date = new Date(dateString);
   const now = new Date();
@@ -77,7 +75,7 @@ const formatRelativeTime = (dateString: string | null) => {
   return `${diffDays}D AGO`;
 };
 
-const formatWaitingTime = (dateString: string | null) => {
+const formatWaitingTime = (dateString: string | null | undefined) => {
   if (!dateString) return 'NEW';
   const date = new Date(dateString);
   const now = new Date();
@@ -92,59 +90,50 @@ export default function VerificationsPage() {
   const { admin } = useAuth();
   const { addNotification } = useNotifications();
   const [activeTab, setActiveTab] = useState<TabType | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [idVerifications, setIdVerifications] = useState<User[]>([]);
-  const [licenseVerifications, setLicenseVerifications] = useState<User[]>([]);
-  const [vehicleVerifications, setVehicleVerifications] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: TabType | null, id: number | null }>({ open: false, type: null, id: null });
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const fetchStats = async () => {
-    try {
-      const data = await getDashboardStats();
-      setStats(data);
-    } catch (error) {
-      console.error('Failed to fetch stats');
-    }
-  };
+  const { data: stats, mutate: mutateStats } = useSWR(
+    admin ? 'dashboard-stats' : null,
+    () => dashboardApi.getStats()
+  );
 
-  useEffect(() => {
-    if (admin) {
-      fetchStats();
-      if (activeTab) fetchData();
-    }
-  }, [admin, activeTab]);
+  const { data: idVerificationsData, mutate: mutateIds, isLoading: loadingIds } = useSWR(
+    admin && activeTab === 'id' ? 'verifications-ids' : null,
+    () => verificationsApi.list(1, 100)
+  );
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      if (activeTab === 'id') {
-        const data = await getPendingVerifications();
-        const sorted = (data.results || []).sort((a: User, b: User) => 
-          new Date(a.verification_submitted_at || 0).getTime() - new Date(b.verification_submitted_at || 0).getTime()
-        );
-        setIdVerifications(sorted);
-      } else if (activeTab === 'license') {
-        const data = await getPendingLicenses();
-        const sorted = (data.results || []).sort((a: User, b: User) => 
-          new Date(a.verification_submitted_at || 0).getTime() - new Date(b.verification_submitted_at || 0).getTime()
-        );
-        setLicenseVerifications(sorted);
-      } else if (activeTab === 'vehicles') {
-        const data = await getPendingVehicles();
-        const sorted = (data || []).sort((a: Vehicle, b: Vehicle) => 
-          new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
-        );
-        setVehicleVerifications(sorted);
-      }
-    } catch (error) {
-      console.error('Failed to fetch verifications');
-    } finally {
-      setLoading(false);
-    }
+  const { data: licenseVerificationsData, mutate: mutateLicenses, isLoading: loadingLicenses } = useSWR(
+    admin && activeTab === 'license' ? 'verifications-licenses' : null,
+    () => licensesApi.list(1, 100)
+  );
+
+  const { data: vehiclesData, mutate: mutateVehicles, isLoading: loadingVehicles } = useSWR(
+    admin && activeTab === 'vehicles' ? 'verifications-vehicles' : null,
+    () => vehiclesApi.listPending(1, 100)
+  );
+
+  const idVerifications = (idVerificationsData?.results || []).sort((a, b) => 
+    new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+  );
+
+  const licenseVerifications = (licenseVerificationsData?.results || []).sort((a, b) => 
+    new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+  );
+
+  const vehicleVerifications = (vehiclesData || []).sort((a, b) => 
+    new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+  );
+
+  const loading = activeTab === 'id' ? loadingIds : activeTab === 'license' ? loadingLicenses : loadingVehicles;
+
+  const mutateAll = () => {
+    mutateStats();
+    if (activeTab === 'id') mutateIds();
+    else if (activeTab === 'license') mutateLicenses();
+    else if (activeTab === 'vehicles') mutateVehicles();
   };
 
   const handleAction = async (type: 'approve' | 'reject', itemType: TabType, id: number) => {
@@ -155,19 +144,15 @@ export default function VerificationsPage() {
 
     setIsActionLoading(true);
     try {
-      if (itemType === 'id') {
-        await verifyUserID(id);
-      } else if (itemType === 'license') {
-        await approveLicense(id);
-      } else if (itemType === 'vehicles') {
-        await approveVehicle(id);
-      }
+      if (itemType === 'id') await verificationsApi.approve(id);
+      else if (itemType === 'license') await licensesApi.approve(id);
+      else if (itemType === 'vehicles') await vehiclesApi.approve(id);
+      
       addNotification('success', 'Action Executed', `${itemType} protocol authorized successfully.`);
       setSelectedItem(null);
-      fetchData();
-      fetchStats();
+      mutateAll();
     } catch (error) {
-      addNotification('warning', 'Action Failed', `Failed to authorize ${itemType} protocol.`);
+      addNotification('warning', 'Action Failed', extractError(error));
     } finally {
       setIsActionLoading(false);
     }
@@ -184,22 +169,17 @@ export default function VerificationsPage() {
       const { type, id } = rejectionModal;
       if (!id || !type) return;
 
-      if (type === 'id') {
-        await rejectVerification(id, rejectionReason);
-      } else if (type === 'license') {
-        await rejectLicense(id, rejectionReason);
-      } else if (type === 'vehicles') {
-        await rejectVehicle(id, rejectionReason);
-      }
+      if (type === 'id') await verificationsApi.reject(id, rejectionReason);
+      else if (type === 'license') await licensesApi.reject(id, rejectionReason);
+      else if (type === 'vehicles') await vehiclesApi.reject(id, rejectionReason);
       
       addNotification('success', 'Protocol Terminated', `${type} protocol has been rejected.`);
       setRejectionModal({ open: false, type: null, id: null });
       setRejectionReason('');
       setSelectedItem(null);
-      fetchData();
-      fetchStats();
+      mutateAll();
     } catch (error) {
-      addNotification('warning', 'Action Failed', `Failed to terminate ${rejectionModal.type} protocol.`);
+      addNotification('warning', 'Action Failed', extractError(error));
     } finally {
       setIsActionLoading(false);
     }
@@ -223,7 +203,7 @@ export default function VerificationsPage() {
             )}
           </div>
           <div>
-            <p className="font-bold text-zinc-900 dark:text-zinc-100">{v.first_name || v.email.split('@')[0]} {v.last_name}</p>
+            <p className="font-bold text-zinc-900 dark:text-zinc-100">{v.first_name || (v.email ? v.email.split('@')[0] : 'USER')} {v.last_name}</p>
             <p className="text-[10px] text-zinc-400 font-mono font-black uppercase">NODE_{v.id}</p>
           </div>
         </div>
@@ -391,7 +371,7 @@ export default function VerificationsPage() {
                </div>
             </div>
          </div>
-         <Button variant="secondary" size="md" onClick={fetchData} className="rounded-xl h-11 px-4">
+         <Button variant="secondary" size="md" onClick={mutateAll} className="rounded-xl h-11 px-4">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
          </Button>
       </div>

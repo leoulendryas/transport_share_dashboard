@@ -1,98 +1,68 @@
+// src/context/AuthContext.tsx
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { adminLogin, refreshToken } from '@/lib/api';
-import { User } from '@/types/user';
-
-interface Admin {
-  id: number;
-  name: string;
-  role: string;
-}
+import { authApi } from '@/lib/api/auth';
+import { tokenStore } from '@/lib/api/client';
+import type { AdminUser, LoginPayload, Verify2FAPayload, LoginResponse, TwoFARequiredResponse } from '@/types/admin';
 
 interface AuthContextType {
-  admin: Admin | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  admin: AdminUser | null;
+  login: (payload: LoginPayload) => Promise<LoginResponse | TwoFARequiredResponse>;
+  verify2FA: (payload: Verify2FAPayload) => Promise<LoginResponse>;
   logout: () => void;
   loading: boolean;
-  refreshAuthToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [admin, setAdmin] = useState<Admin | null>(null);
+  const [admin, setAdmin] = useState<AdminUser | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const storedAdmin = localStorage.getItem('admin');
-    const token = sessionStorage.getItem('access_token');
-    
-    if (storedAdmin && token) {
-      setAdmin(JSON.parse(storedAdmin));
-    } else if (!window.location.pathname.includes('/login')) {
-      // If no token and not on login page, we might want to logout or just stay as is
-      // depending on how protected routes are handled.
+    if (storedAdmin && tokenStore.access) {
+      try {
+        setAdmin(JSON.parse(storedAdmin));
+      } catch {
+        tokenStore.clear();
+      }
     }
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const response = await adminLogin({ email }, password);
-      
-      const adminData: Admin = {
-        id: response.user.id,
-        name: `${response.user.first_name} ${response.user.last_name}`,
-        role: 'admin',
-      };
-      
-      setAdmin(adminData);
-      sessionStorage.setItem('access_token', response.access_token);
-      sessionStorage.setItem('refresh_token', response.refresh_token);
-      localStorage.setItem('admin', JSON.stringify(adminData));
-      return true;
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      throw error;
+  const login = async (payload: LoginPayload) => {
+    const result = await authApi.login(payload);
+    if (!('requires_2fa' in result)) {
+      setAdmin(result.user);
+      localStorage.setItem('admin', JSON.stringify(result.user));
     }
+    return result;
+  };
+
+  const verify2FA = async (payload: Verify2FAPayload) => {
+    const response = await authApi.verify2FA(payload);
+    setAdmin(response.user);
+    localStorage.setItem('admin', JSON.stringify(response.user));
+    return response;
   };
 
   const logout = () => {
     setAdmin(null);
-    sessionStorage.removeItem('access_token');
-    sessionStorage.removeItem('refresh_token');
-    localStorage.removeItem('admin');
+    authApi.logout();
     router.push('/admin/login');
-  };
-
-  const refreshAuthToken = async (): Promise<string | null> => {
-    const currentRefreshToken = sessionStorage.getItem('refresh_token');
-    if (!currentRefreshToken) return null;
-    
-    try {
-      const response = await refreshToken(currentRefreshToken);
-      
-      sessionStorage.setItem('access_token', response.access_token);
-      sessionStorage.setItem('refresh_token', response.refresh_token);
-      
-      return response.access_token;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      logout();
-      return null;
-    }
   };
 
   return (
     <AuthContext.Provider value={{ 
       admin, 
       login, 
+      verify2FA,
       logout, 
-      loading,
-      refreshAuthToken
+      loading 
     }}>
       {children}
     </AuthContext.Provider>
@@ -106,4 +76,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

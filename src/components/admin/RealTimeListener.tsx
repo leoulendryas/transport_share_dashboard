@@ -1,43 +1,60 @@
+// src/components/admin/RealTimeListener.tsx
 'use client';
 
-import { useEffect } from 'react';
-import { useSocket } from '@/context/SocketContext';
+import { useAdminSocket, AdminWsEvent } from '@/lib/ws/useAdminSocket';
 import { useNotifications } from '@/context/NotificationContext';
+import { useCallback } from 'react';
 
 export default function RealTimeListener() {
-  const { socket } = useSocket();
   const { addNotification } = useNotifications();
 
-  useEffect(() => {
-    if (!socket) return;
-
-    // Listen for SOS alerts
-    socket.on('sos_alert', (data: any) => {
-      addNotification(
-        'sos',
-        '🚨 EMERGENCY SIGNAL',
-        `An SOS alert has been triggered by ${data.user_name || 'a user'} on ride #${data.ride_id}.`
-      );
+  const handleEvent = useCallback((event: AdminWsEvent) => {
+    switch (event.type) {
+      case 'ride_started':
+        addNotification(
+          'info',
+          'Ride Started',
+          `Ride #${event.ride_id} has officially started.`
+        );
+        break;
       
-      // Play alert sound if available
-      const audio = new Audio('/alert.mp3');
-      audio.play().catch(e => console.log('Audio play failed'));
-    });
+      case 'ride_completed':
+        addNotification(
+          'success',
+          'Ride Completed',
+          `Ride #${event.ride_id} has been successfully completed.`
+        );
+        break;
 
-    // Listen for new reports
-    socket.on('new_report', (data: any) => {
-      addNotification(
-        'warning',
-        'New Incident Reported',
-        `A new report has been filed regarding ride #${data.ride_id}.`
-      );
-    });
+      case 'no_show_flagged':
+        addNotification(
+          'warning',
+          'Passenger No-Show',
+          `A no-show has been flagged on ride #${event.rideId}.`
+        );
+        break;
 
-    return () => {
-      socket.off('sos_alert');
-      socket.off('new_report');
-    };
-  }, [socket, addNotification]);
+      case 'payment_refunded':
+        addNotification(
+          'info',
+          'Refund Processed',
+          `A refund of ${event.amount_percent * 100}% has been processed.`
+        );
+        break;
+
+      case 'SOS_RESOLVED':
+        addNotification(
+          'success',
+          'SOS Resolved',
+          'An emergency signal has been successfully resolved.'
+        );
+        break;
+
+      // Add more handlers as needed based on the integration guide
+    }
+  }, [addNotification]);
+
+  useAdminSocket(handleEvent);
 
   return null;
 }

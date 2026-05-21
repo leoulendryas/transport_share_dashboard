@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react';
-import { User, DetailedUser, Company } from '@/types/user';
+import useSWR from 'swr';
+import { 
+  AdminUser as User, 
+  UserDetail as DetailedUser, 
+  Company,
+  MemberLevel
+} from '@/types/admin';
 import { 
   Ban, 
   Search, 
@@ -27,22 +33,12 @@ import {
   Building2,
   Clock
 } from 'lucide-react';
-import { 
-  getUsers, 
-  toggleAdminStatus, 
-  getUserById, 
-  updateMemberLevel, 
-  banUser, 
-  unbanUser,
-  verifyUserID,
-  rejectVerification,
-  approveLicense,
-  rejectLicense,
-  approveVehicle,
-  rejectVehicle,
-  unsuspendUser,
-  getCompanies
-} from '@/lib/api';
+import { usersApi } from '@/lib/api/users';
+import { companiesApi } from '@/lib/api/companies';
+import { verificationsApi } from '@/lib/api/verifications';
+import { licensesApi } from '@/lib/api/licenses';
+import { vehiclesApi } from '@/lib/api/vehicles';
+import { extractError } from '@/lib/api/errors';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
 import { DataTable } from '@/components/ui/DataTable';
@@ -52,11 +48,10 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
-const MemberLevels = ['Newcomer', 'Standard', 'Premium', 'Elite'];
+const MemberLevels: MemberLevel[] = ['Standard', 'Premium', 'Elite'];
 
 const getMemberLevelColor = (level?: string) => {
   switch (level?.toLowerCase()) {
-    case 'newcomer': return 'bg-zinc-100 text-zinc-500 border-zinc-200';
     case 'standard': return 'bg-blue-50 text-blue-600 border-blue-100';
     case 'premium': return 'bg-amber-50 text-amber-600 border-amber-200'; // Gold
     case 'elite': return 'bg-purple-50 text-purple-600 border-purple-100';
@@ -96,83 +91,46 @@ const isCurrentlySuspended = (user: User): boolean =>
 export default function UsersPage() {
   const { admin } = useAuth();
   const { addNotification } = useNotifications();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBanned, setFilterBanned] = useState<'all' | 'banned' | 'active'>('all');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [detailedUser, setDetailedUser] = useState<DetailedUser | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loadingDetails, setLoadingDetails] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: 'id' | 'license' | 'vehicle', id: number | null }>({ open: false, type: 'id', id: null });
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const fetchUsers = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const data = await getUsers(1, 100, searchTerm || undefined, filterBanned === 'all' ? undefined : filterBanned === 'banned');
-      setUsers(data.results);
-    } catch (error) {
-      addNotification('warning', 'Sync Failed', 'Unable to retrieve user directory.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: usersData, mutate: mutateUsers, isLoading: loading } = useSWR(
+    admin ? ['users', searchTerm, filterBanned] : null,
+    () => usersApi.list({
+      search: searchTerm || undefined,
+      banned: filterBanned === 'all' ? undefined : filterBanned === 'banned',
+      limit: 100
+    })
+  );
 
-  const fetchInitialData = async () => {
-    try {
-      const comps = await getCompanies();
-      setCompanies(comps || []);
-    } catch (error) {
-      console.error('Failed to fetch companies');
-    }
-  };
+  const users = usersData?.results || [];
 
-  useEffect(() => {
-    fetchInitialData();
-  }, [admin]);
+  const { data: detailedUser, mutate: mutateDetails, isLoading: loadingDetails } = useSWR(
+    admin && selectedUserId ? ['users', selectedUserId] : null,
+    () => usersApi.get(selectedUserId!)
+  );
 
-  useEffect(() => {
-    fetchUsers();
-  }, [admin, filterBanned]);
+  const { data: companiesData } = useSWR(
+    admin ? 'companies' : null,
+    () => companiesApi.list()
+  );
 
-  useEffect(() => {
-    if (selectedUserId !== null && admin) {
-      fetchUserDetails(selectedUserId);
-    } else {
-      setDetailedUser(null);
-    }
-  }, [selectedUserId, admin]);
-
-  const fetchUserDetails = async (userId: number) => {
-    setLoadingDetails(true);
-    try {
-      const data = await getUserById(userId);
-      setDetailedUser(data);
-      if (data.rejection_reason) {
-        setRejectionReason(data.rejection_reason);
-      }
-    } catch (error) {
-      addNotification('warning', 'Access Denied', 'Failed to retrieve deep profile data.');
-    } finally {
-      setLoadingDetails(false);
-    }
-  };
+  const companies = companiesData || [];
 
   const handleToggleAdmin = async (user: User) => {
     if (!admin) return;
     setIsUpdating(true);
     try {
-      await toggleAdminStatus(user.id, !user.is_admin);
+      await usersApi.toggleAdmin(user.id, !user.is_admin);
       addNotification('success', 'Permissions Updated', `${user.first_name}'s administrative status changed.`);
-      if (detailedUser && detailedUser.id === user.id) {
-        setDetailedUser({ ...detailedUser, is_admin: !user.is_admin });
-      }
-      fetchUsers();
+      mutateUsers();
+      if (selectedUserId === user.id) mutateDetails();
     } catch (error) {
-      addNotification('warning', 'Update Failed', 'Failed to synchronize permissions.');
+      addNotification('warning', 'Update Failed', extractError(error));
     } finally {
       setIsUpdating(false);
     }
@@ -183,21 +141,16 @@ export default function UsersPage() {
     setIsUpdating(true);
     try {
       if (user.banned) {
-        await unbanUser(user.id);
+        await usersApi.unban(user.id);
         addNotification('success', 'Node Restored', `${user.first_name}'s access has been reactivated.`);
-        if (detailedUser && detailedUser.id === user.id) {
-          setDetailedUser({ ...detailedUser, banned: false });
-        }
       } else {
-        await banUser(user.id);
+        await usersApi.ban(user.id);
         addNotification('success', 'Node Suspended', `${user.first_name}'s access has been terminated.`);
-        if (detailedUser && detailedUser.id === user.id) {
-          setDetailedUser({ ...detailedUser, banned: true });
-        }
       }
-      fetchUsers();
+      mutateUsers();
+      if (selectedUserId === user.id) mutateDetails();
     } catch (error) {
-      addNotification('warning', 'State Update Failed', 'Failed to synchronize node status.');
+      addNotification('warning', 'State Update Failed', extractError(error));
     } finally {
       setIsUpdating(false);
     }
@@ -207,14 +160,12 @@ export default function UsersPage() {
     if (!admin) return;
     setIsUpdating(true);
     try {
-      await unsuspendUser(userId);
+      await usersApi.unsuspend(userId);
       addNotification('success', 'Suspension Lifted', 'User suspension has been cleared.');
-      if (detailedUser && detailedUser.id === userId) {
-        setDetailedUser({ ...detailedUser, suspended_until: null, suspension_reason: null });
-      }
-      fetchUsers();
+      mutateUsers();
+      if (selectedUserId === userId) mutateDetails();
     } catch (error) {
-      addNotification('warning', 'Update Failed', 'Failed to clear suspension.');
+      addNotification('warning', 'Update Failed', extractError(error));
     } finally {
       setIsUpdating(false);
     }
@@ -224,15 +175,15 @@ export default function UsersPage() {
     if (!admin) return;
     setIsUpdating(true);
     try {
-      if (type === 'id') await verifyUserID(id);
-      else if (type === 'license') await approveLicense(id);
-      else if (type === 'vehicle') await approveVehicle(id);
+      if (type === 'id') await verificationsApi.approve(id);
+      else if (type === 'license') await licensesApi.approve(id);
+      else if (type === 'vehicle') await vehiclesApi.approve(id);
       
       addNotification('success', 'Protocol Authorized', `${type.toUpperCase()} evidence approved.`);
-      if (selectedUserId) fetchUserDetails(selectedUserId);
-      fetchUsers();
+      mutateUsers();
+      if (selectedUserId) mutateDetails();
     } catch (error) {
-      addNotification('warning', 'Auth Failure', `Failed to authorize ${type}.`);
+      addNotification('warning', 'Auth Failure', extractError(error));
     } finally {
       setIsUpdating(false);
     }
@@ -246,17 +197,17 @@ export default function UsersPage() {
     if (!admin || !rejectionModal.id || !rejectionReason.trim()) return;
     setIsUpdating(true);
     try {
-      if (rejectionModal.type === 'id') await rejectVerification(rejectionModal.id, rejectionReason);
-      else if (rejectionModal.type === 'license') await rejectLicense(rejectionModal.id, rejectionReason);
-      else if (rejectionModal.type === 'vehicle') await rejectVehicle(rejectionModal.id, rejectionReason);
+      if (rejectionModal.type === 'id') await verificationsApi.reject(rejectionModal.id, rejectionReason);
+      else if (rejectionModal.type === 'license') await licensesApi.reject(rejectionModal.id, rejectionReason);
+      else if (rejectionModal.type === 'vehicle') await vehiclesApi.reject(rejectionModal.id, rejectionReason);
       
       addNotification('success', 'Protocol Terminated', `${rejectionModal.type.toUpperCase()} evidence rejected.`);
       setRejectionModal({ open: false, type: 'id', id: null });
       setRejectionReason('');
-      if (selectedUserId) fetchUserDetails(selectedUserId);
-      fetchUsers();
+      mutateUsers();
+      if (selectedUserId) mutateDetails();
     } catch (error) {
-      addNotification('warning', 'Action Failed', 'Failed to submit rejection protocol.');
+      addNotification('warning', 'Action Failed', extractError(error));
     } finally {
       setIsUpdating(false);
     }
@@ -266,28 +217,15 @@ export default function UsersPage() {
     if (!admin) return;
     setIsUpdating(true);
     try {
-      await updateMemberLevel(userId, level);
-      if (detailedUser && detailedUser.id === userId) {
-        setDetailedUser({ ...detailedUser, member_level: level as any });
-      }
-      fetchUsers();
+      await usersApi.updateMemberLevel(userId, level as MemberLevel);
+      mutateUsers();
+      if (selectedUserId === userId) mutateDetails();
     } catch (error) {
-      alert('Failed to update member level');
+      addNotification('warning', 'Update Failed', extractError(error));
     } finally {
       setIsUpdating(false);
     }
   };
-
-  const filteredUsers = users.filter(user => {
-    const searchStr = searchTerm.toLowerCase();
-    return (
-      (user.first_name?.toLowerCase() ?? '').includes(searchStr) ||
-      (user.last_name?.toLowerCase() ?? '').includes(searchStr) ||
-      (user.email?.toLowerCase() ?? '').includes(searchStr) ||
-      (user.phone_number?.toLowerCase() ?? '').includes(searchStr) ||
-      user.id.toString().includes(searchStr)
-    );
-  });
 
   const columns = [
     {
@@ -308,7 +246,7 @@ export default function UsersPage() {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-bold text-zinc-900 dark:text-zinc-100">{user.first_name || user.email.split('@')[0]} {user.last_name}</span>
+              <span className="font-bold text-zinc-900 dark:text-zinc-100">{user.first_name || (user.email ? user.email.split('@')[0] : 'USER')} {user.last_name}</span>
               {user.is_admin && <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-purple-100 text-purple-600 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800">ADMIN</Badge>}
               {user.is_driver && <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800"><Car className="w-2 h-2 mr-1" /> DRIVER</Badge>}
             </div>
@@ -428,7 +366,7 @@ export default function UsersPage() {
             <option value="active">Active Only</option>
             <option value="banned">Suspended Only</option>
           </select>
-          <Button variant="secondary" size="md" onClick={fetchUsers} className="rounded-xl">
+          <Button variant="secondary" size="md" onClick={() => mutateUsers()} className="rounded-xl">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -436,7 +374,7 @@ export default function UsersPage() {
 
       <DataTable 
         columns={columns} 
-        data={filteredUsers} 
+        data={users} 
         loading={loading}
         onRowClick={(user) => setSelectedUserId(user.id)}
       />
@@ -470,7 +408,7 @@ export default function UsersPage() {
                 )}
               </div>
               <div className="space-y-1">
-                <h3 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tighter">{detailedUser.first_name || detailedUser.email.split('@')[0]} {detailedUser.last_name}</h3>
+                <h3 className="text-2xl font-black text-zinc-950 dark:text-white tracking-tighter">{detailedUser.first_name || (detailedUser.email ? detailedUser.email.split('@')[0] : 'USER')} {detailedUser.last_name}</h3>
                 <div className="flex items-center gap-2">
                   <Badge variant={detailedUser.banned ? 'error' : isCurrentlySuspended(detailedUser) ? 'warning' : 'success'}>
                     {detailedUser.banned ? 'Terminated Account' : isCurrentlySuspended(detailedUser) ? 'Suspended Node' : 'Active Account'}

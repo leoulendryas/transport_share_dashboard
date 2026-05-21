@@ -1,60 +1,47 @@
+// src/components/admin/pages/ReportsPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Report } from '@/types/user';
+import { useState } from 'react';
+import useSWR from 'swr';
+import { Report } from '@/types/admin';
 import { 
   AlertTriangle, 
-  Check, 
   Eye, 
   ShieldAlert, 
-  MessageSquare,
   User as UserIcon,
-  Calendar,
   RefreshCw,
-  Mail,
   FileText,
   CheckCircle2,
   XCircle,
-  Clock,
   UserCheck,
   Activity,
   ArrowRight
 } from 'lucide-react';
-import { getReports, resolveReport } from '@/lib/api';
+import { moderationApi } from '@/lib/api/moderation';
 import { useAuth } from '@/context/AuthContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { extractError } from '@/lib/api/errors';
 
 export default function ReportsPage() {
   const { admin } = useAuth();
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const fetchReports = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const data = await getReports(currentPage, 10, filter === 'all' ? undefined : filter);
-      setReports(data.results);
-      setTotal(data.pagination.total);
-    } catch (error) {
-      console.error('Failed to fetch reports');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, mutate, isLoading } = useSWR(
+    admin ? ['reports', currentPage, statusFilter] : null,
+    () => moderationApi.listReports(currentPage, 10, statusFilter === 'all' ? undefined : statusFilter),
+    { keepPreviousData: true }
+  );
 
-  useEffect(() => {
-    fetchReports();
-  }, [admin, currentPage, filter]);
+  const reports = data?.results || [];
+  const total = data?.pagination?.total || 0;
+  const totalPages = Math.ceil(total / 10);
 
   const handleResolve = async (id: number, status: 'resolved' | 'dismissed') => {
     if (!admin) return;
@@ -63,11 +50,11 @@ export default function ReportsPage() {
 
     setIsActionLoading(true);
     try {
-      await resolveReport(id, status, notes);
+      await moderationApi.resolveReport(id, { status, notes });
       setSelectedReport(null);
-      fetchReports();
-    } catch (error) {
-      alert('Failed to resolve report');
+      mutate();
+    } catch (err) {
+      alert(extractError(err));
     } finally {
       setIsActionLoading(false);
     }
@@ -101,8 +88,8 @@ export default function ReportsPage() {
       header: 'Breach Protocol',
       accessor: (r: Report) => (
         <div className="flex flex-col max-w-[200px]">
-          <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight truncate">{r.reason}</span>
-          <span className="text-[10px] text-zinc-500 truncate">{r.description}</span>
+          <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight truncate">{r.description}</span>
+          <span className="text-[10px] text-zinc-500 truncate">{r.admin_notes}</span>
         </div>
       )
     },
@@ -110,7 +97,7 @@ export default function ReportsPage() {
       header: 'Status',
       accessor: (r: Report) => (
         <Badge variant={r.status === 'pending' ? 'warning' : r.status === 'resolved' ? 'success' : 'zinc'}>
-          {r.status}
+          {r.status.toUpperCase()}
         </Badge>
       )
     },
@@ -137,8 +124,8 @@ export default function ReportsPage() {
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <select
-            value={filter}
-            onChange={(e) => { setFilter(e.target.value as any); setCurrentPage(1); }}
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value as any); setCurrentPage(1); }}
             className="px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all cursor-pointer dark:text-zinc-200"
           >
             <option value="all">Full Log</option>
@@ -146,8 +133,8 @@ export default function ReportsPage() {
             <option value="resolved">Neutralized</option>
             <option value="dismissed">Dismissed</option>
           </select>
-          <Button variant="secondary" size="md" onClick={fetchReports} className="rounded-xl h-11">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="secondary" size="md" onClick={() => mutate()} className="rounded-xl h-11">
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
@@ -155,14 +142,14 @@ export default function ReportsPage() {
       <DataTable 
         columns={columns} 
         data={reports} 
-        loading={loading}
+        loading={isLoading}
         onRowClick={(r) => setSelectedReport(r)}
         emptyMessage="Security perimeter secure. No reports found."
       />
 
-      {Math.ceil(total / 10) > 1 && (
+      {totalPages > 1 && (
         <div className="flex justify-center gap-1.5 pt-6">
-          {Array.from({ length: Math.ceil(total / 10) }, (_, i) => i + 1).map((page) => (
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
             <button
               key={page}
               onClick={() => setCurrentPage(page)}
@@ -205,15 +192,8 @@ export default function ReportsPage() {
                   <div className="flex items-start gap-4">
                      <ShieldAlert className="w-4 h-4 text-rose-500 mt-1" />
                      <div>
-                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Breach Reason</p>
-                        <p className="text-sm font-black text-zinc-950 dark:text-white uppercase tracking-tight">{selectedReport.reason}</p>
-                     </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                     <FileText className="w-4 h-4 text-zinc-400 mt-1" />
-                     <div>
-                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Incident Description</p>
-                        <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-relaxed italic">"{selectedReport.description || 'No detailed evidence provided.'}"</p>
+                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Breach Protocol</p>
+                        <p className="text-sm font-black text-zinc-950 dark:text-white uppercase tracking-tight">{selectedReport.description}</p>
                      </div>
                   </div>
                </div>
@@ -275,13 +255,15 @@ export default function ReportsPage() {
                ) : (
                   <div className="grid grid-cols-2 gap-3 pt-4">
                      <Button
+                        disabled={isActionLoading}
                         onClick={() => handleResolve(selectedReport.id, 'resolved')}
                         className="h-14 rounded-2xl shadow-xl shadow-zinc-200 dark:shadow-none text-[10px] font-black uppercase tracking-[0.2em]"
                      >
-                        <UserCheck className="w-5 h-5 mr-2" /> Sanction Node
+                        {isActionLoading ? <LoadingSpinner /> : <><UserCheck className="w-5 h-5 mr-2" /> Sanction Node</>}
                      </Button>
                      <Button
                         variant="secondary"
+                        disabled={isActionLoading}
                         onClick={() => handleResolve(selectedReport.id, 'dismissed')}
                         className="h-14 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-[10px] font-black uppercase tracking-[0.2em]"
                      >

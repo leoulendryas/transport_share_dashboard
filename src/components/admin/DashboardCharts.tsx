@@ -1,7 +1,7 @@
 'use client';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Stats } from '@/types/user';
+import { DashboardStats as Stats } from '@/types/admin';
 import { useTheme } from '@/context/ThemeContext';
 
 interface DashboardChartsProps {

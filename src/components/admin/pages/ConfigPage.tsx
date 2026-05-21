@@ -1,42 +1,47 @@
+// src/components/admin/pages/ConfigPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { Settings, Save, Percent, MapPin, Shield, Zap, Globe, Bell } from 'lucide-react';
-import { getConfig, updateConfig } from '@/lib/api';
+import { Save, Percent, MapPin, Shield, Zap, Globe, Bell } from 'lucide-react';
+import { settingsApi } from '@/lib/api/settings';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
+import { extractError } from '@/lib/api/errors';
 
 export default function ConfigPage() {
   const { admin } = useAuth();
-  const [config, setConfig] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [localConfig, setLocalConfig] = useState<Record<string, string> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (!admin) return;
-    getConfig()
-      .then(setConfig)
-      .catch(err => console.error('Failed to load config', err))
-      .finally(() => setLoading(false));
-  }, [admin]);
+  const { data: config, error, isLoading, mutate } = useSWR(
+    admin ? 'system-settings' : null,
+    () => settingsApi.get(),
+    {
+      onSuccess: (data) => {
+        if (!localConfig) setLocalConfig(data);
+      }
+    }
+  );
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!admin) return;
+    if (!admin || !localConfig) return;
     
     setIsSaving(true);
     try {
-      await updateConfig(config);
+      await settingsApi.update(localConfig);
+      mutate();
       alert('System configuration updated successfully.');
-    } catch (error) {
-      alert('Failed to save configuration');
+    } catch (err) {
+      alert(extractError(err));
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (loading) {
+  if (isLoading && !localConfig) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4">
         <LoadingSpinner />
@@ -51,8 +56,8 @@ export default function ConfigPage() {
       icon: Percent,
       description: 'Configure commission rates and payment thresholds.',
       fields: [
-        { label: 'Platform Commission (%)', key: 'commissionRate', type: 'number', icon: Percent },
-        { label: 'Minimum Payout (ETB)', key: 'minPayout', type: 'number', icon: Zap },
+        { label: 'Platform Commission (%)', key: 'platform_fee_pct', type: 'number', icon: Percent },
+        { label: 'Minimum Payout (ETB)', key: 'min_payout_amount', type: 'number', icon: Zap },
       ]
     },
     {
@@ -60,17 +65,8 @@ export default function ConfigPage() {
       icon: MapPin,
       description: 'Control radius and distance constraints for rides.',
       fields: [
-        { label: 'Max Ride Distance (KM)', key: 'maxRideDistance', type: 'number', icon: Globe },
-        { label: 'Driver Search Radius (KM)', key: 'searchRadius', type: 'number', icon: MapPin },
-      ]
-    },
-    {
-      title: 'Security & Trust',
-      icon: Shield,
-      description: 'Global safety and verification parameters.',
-      fields: [
-        { label: 'Auto-Ban Threshold (Reports)', key: 'autoBanThreshold', type: 'number', icon: Shield },
-        { label: 'SOS Response Window (Mins)', key: 'sosWindow', type: 'number', icon: Bell },
+        { label: 'Max Price Multiplier', key: 'max_price_multiplier', type: 'number', icon: Globe },
+        { label: 'Platform Mode (Maintenance)', key: 'maintenance_mode', type: 'text', icon: Shield },
       ]
     }
   ];
@@ -83,9 +79,8 @@ export default function ConfigPage() {
             <h2 className="text-xl font-bold text-zinc-900 dark:text-white">System Configuration</h2>
             <p className="text-sm text-zinc-500">Fine-tune platform behavior and global variables.</p>
           </div>
-          <Button type="submit" loading={isSaving} className="shadow-lg shadow-zinc-200 dark:shadow-none">
-            <Save className="w-4 h-4 mr-2" />
-            Save Changes
+          <Button type="submit" disabled={isSaving} className="shadow-lg shadow-zinc-200 dark:shadow-none">
+            {isSaving ? <LoadingSpinner size="sm" /> : <><Save className="w-4 h-4 mr-2" /> Save Changes</>}
           </Button>
         </div>
 
@@ -113,10 +108,10 @@ export default function ConfigPage() {
                       <field.icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300 group-focus-within:text-zinc-950 dark:group-focus-within:text-white transition-colors" />
                       <input 
                         type={field.type} 
-                        value={config?.[field.key] || ''} 
-                        onChange={e => setConfig({
-                          ...config, 
-                          [field.key]: field.type === 'number' ? parseFloat(e.target.value) : e.target.value
+                        value={localConfig?.[field.key] || ''} 
+                        onChange={e => setLocalConfig({
+                          ...localConfig, 
+                          [field.key]: e.target.value
                         })} 
                         className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all"
                       />

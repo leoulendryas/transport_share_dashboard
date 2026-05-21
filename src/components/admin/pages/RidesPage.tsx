@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Ride, Company } from '@/types/user';
+import useSWR from 'swr';
+import { 
+  Ride, 
+  Company, 
+  RideDetail, 
+  Message, 
+  RideStatusHistoryEntry,
+  RideStatus
+} from '@/types/admin';
 import { 
   Car, 
   MapPin, 
@@ -29,8 +37,11 @@ import {
   Filter,
   ChevronDown
 } from 'lucide-react';
-import { getRides, adminCancelRide, getRideById, getRideMessages, updateRideStatus, forceFinalizeRide, toggleRideChat, getRideHistory, getCompanies } from '@/lib/api';
+import { ridesApi, GetRidesParams } from '@/lib/api/rides';
+import { companiesApi } from '@/lib/api/companies';
+import { extractError } from '@/lib/api/errors';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Drawer } from '@/components/ui/Drawer';
@@ -39,27 +50,20 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 const ITEMS_PER_PAGE = 10;
 
-const RIDE_STATUSES = ['active', 'full', 'ongoing', 'pending_completion', 'completed', 'cancelled', 'disputed'];
+const RIDE_STATUSES: RideStatus[] = ['active', 'full', 'ongoing', 'pending_completion', 'completed', 'cancelled', 'disputed', 'expired'];
 
 export default function RidesPage() {
   const { admin } = useAuth();
-  const [rides, setRides] = useState<Ride[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { addNotification } = useNotifications();
   const [currentPage, setCurrentPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [companies, setCompanies] = useState<Company[]>([]);
   
   const [selectedRideId, setSelectedRideId] = useState<number | null>(null);
-  const [detailedRide, setDetailedRide] = useState<Ride | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
-  const [loadingDetails, setLoadingDetails] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'chat' | 'history'>('info');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
-    status: '',
+    status: '' as RideStatus | '',
     company_id: '',
     start_date: '',
     end_date: '',
@@ -67,82 +71,58 @@ export default function RidesPage() {
     max_price: ''
   });
 
-  const fetchRides = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const activeFilters: any = {};
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value) activeFilters[key] = key.includes('price') || key === 'company_id' ? Number(value) : value;
-      });
-
-      const data = await getRides(currentPage, ITEMS_PER_PAGE, activeFilters);
-      setRides(data.results || []);
-      setTotal(data.pagination?.total || 0);
-    } catch (error) {
-      console.error('Failed to fetch rides', error);
-    } finally {
-      setLoading(false);
+  const { data: ridesData, mutate: mutateRides, isLoading: loading } = useSWR(
+    admin ? ['rides', currentPage, filters] : null,
+    () => {
+      const params: GetRidesParams = {
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+        status: filters.status || undefined,
+        company_id: filters.company_id ? Number(filters.company_id) : undefined,
+        start_date: filters.start_date || undefined,
+        end_date: filters.end_date || undefined,
+        min_price: filters.min_price ? Number(filters.min_price) : undefined,
+        max_price: filters.max_price ? Number(filters.max_price) : undefined,
+      };
+      return ridesApi.list(params);
     }
-  };
+  );
+
+  const rides = ridesData?.results || [];
+  const total = ridesData?.pagination?.total || 0;
+
+  const { data: companies = [] } = useSWR(
+    admin ? 'companies' : null,
+    () => companiesApi.list()
+  );
+
+  const { data: detailedRide, mutate: mutateDetailedRide, isLoading: loadingDetails } = useSWR(
+    admin && selectedRideId ? ['rides', selectedRideId] : null,
+    () => ridesApi.get(selectedRideId!)
+  );
+
+  const { data: messages = [] } = useSWR(
+    admin && selectedRideId && activeDetailTab === 'chat' ? ['rides', selectedRideId, 'messages'] : null,
+    () => ridesApi.getMessages(selectedRideId!)
+  );
+
+  const { data: history = [] } = useSWR(
+    admin && selectedRideId && activeDetailTab === 'history' ? ['rides', selectedRideId, 'history'] : null,
+    () => ridesApi.getHistory(selectedRideId!)
+  );
 
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
-
-  const fetchInitialData = async () => {
-    try {
-      const comps = await getCompanies();
-      setCompanies(comps || []);
-    } catch (error) {
-      console.error('Failed to fetch companies');
-    }
-  };
-
-  useEffect(() => {
-    fetchInitialData();
-  }, [admin]);
-
-  useEffect(() => {
-    fetchRides();
-  }, [admin, currentPage, filters]);
-
-  useEffect(() => {
-    if (selectedRideId !== null && admin) {
-      fetchRideDetails(selectedRideId);
-    } else {
-      setDetailedRide(null);
-      setMessages([]);
-      setHistory([]);
-      setActiveDetailTab('info');
-    }
-  }, [selectedRideId, admin]);
-
-  const fetchRideDetails = async (rideId: number) => {
-    setLoadingDetails(true);
-    try {
-      const [rideData, msgData, historyData] = await Promise.all([
-        getRideById(rideId),
-        getRideMessages(rideId),
-        getRideHistory(rideId)
-      ]);
-      setDetailedRide(rideData);
-      setMessages(msgData || []);
-      setHistory(historyData || []);
-    } catch (error) {
-      console.error('Failed to fetch ride details', error);
-    } finally {
-      setLoadingDetails(false);
-    }
-  };
 
   const handleUpdateStatus = async (rideId: number, status: string) => {
     if (!admin) return;
     setIsUpdatingStatus(true);
     try {
-      await updateRideStatus(rideId, status);
-      fetchRideDetails(rideId);
-      fetchRides();
+      await ridesApi.updateStatus(rideId, status as RideStatus);
+      mutateDetailedRide();
+      mutateRides();
+      addNotification('success', 'Status Updated', `Ride ${rideId} status changed to ${status}.`);
     } catch (error) {
-      alert('Failed to update status');
+      addNotification('warning', 'Update Failed', extractError(error));
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -151,32 +131,35 @@ export default function RidesPage() {
   const handleCancel = async (rideId: number) => {
     if (!admin || !window.confirm('Are you sure you want to cancel this ride? This will notify all participants.')) return;
     try {
-      await adminCancelRide(rideId);
-      fetchRideDetails(rideId);
-      fetchRides();
+      await ridesApi.cancel(rideId);
+      mutateDetailedRide();
+      mutateRides();
+      addNotification('success', 'Ride Cancelled', `Ride ${rideId} has been terminated.`);
     } catch (error) {
-      alert('Failed to cancel ride');
+      addNotification('warning', 'Cancellation Failed', extractError(error));
     }
   };
 
   const handleToggleChat = async (rideId: number, lock: boolean) => {
     if (!admin) return;
     try {
-      await toggleRideChat(rideId, lock);
-      fetchRideDetails(rideId);
+      await ridesApi.toggleChat(rideId, lock);
+      mutateDetailedRide();
+      addNotification('success', 'Comms Updated', `Chat has been ${lock ? 'locked' : 'unlocked'}.`);
     } catch (error) {
-      alert('Failed to toggle chat lock');
+      addNotification('warning', 'Action Failed', extractError(error));
     }
   };
 
   const handleForceFinalize = async (rideId: number) => {
     if (!admin || !window.confirm('Force finalize this ride? This will trigger payouts if applicable.')) return;
     try {
-      await forceFinalizeRide(rideId);
-      fetchRideDetails(rideId);
-      fetchRides();
+      await ridesApi.finalize(rideId);
+      mutateDetailedRide();
+      mutateRides();
+      addNotification('success', 'Ride Finalized', `Ride ${rideId} has been finalized.`);
     } catch (error) {
-      alert('Failed to finalize ride');
+      addNotification('warning', 'Finalization Failed', extractError(error));
     }
   };
 
@@ -305,7 +288,7 @@ export default function RidesPage() {
     }
   ];
 
-  const PricingInspector = ({ audit }: { audit: NonNullable<Ride['pricing_audit']> }) => (
+  const PricingInspector = ({ audit, price_per_seat }: { audit: NonNullable<Ride['pricing_audit']>, price_per_seat: number }) => (
     <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-6">
       <div className="flex items-center justify-between">
         <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -323,15 +306,15 @@ export default function RidesPage() {
           <div className="h-1.5 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
             <div 
               className="h-full bg-zinc-950 dark:bg-white rounded-full transition-all duration-1000"
-              style={{ width: `${((audit.price_per_seat - audit.floor_limit) / (audit.ceiling_limit - audit.floor_limit)) * 100}%` }}
+              style={{ width: `${((price_per_seat - audit.floor_limit) / (audit.ceiling_limit - audit.floor_limit)) * 100}%` }}
             />
           </div>
           <div 
             className="absolute top-4 flex flex-col items-center -ml-4 transition-all duration-1000"
-            style={{ left: `${((audit.price_per_seat - audit.floor_limit) / (audit.ceiling_limit - audit.floor_limit)) * 100}%` }}
+            style={{ left: `${((price_per_seat - audit.floor_limit) / (audit.ceiling_limit - audit.floor_limit)) * 100}%` }}
           >
             <div className="w-1 h-3 bg-zinc-950 dark:bg-white" />
-            <span className="text-[10px] font-black text-zinc-950 dark:text-white mt-1">{audit.price_per_seat} ETB</span>
+            <span className="text-[10px] font-black text-zinc-950 dark:text-white mt-1">{price_per_seat} ETB</span>
           </div>
         </div>
 
@@ -371,7 +354,7 @@ export default function RidesPage() {
             <Filter className="w-4 h-4" />
             <span className="text-[10px] font-black uppercase tracking-widest">{showFilters ? 'Hide Filters' : 'Filters'}</span>
           </Button>
-          <Button variant="secondary" size="md" onClick={fetchRides} className="rounded-xl h-11 px-4">
+          <Button variant="secondary" size="md" onClick={() => mutateRides()} className="rounded-xl h-11 px-4">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -383,7 +366,7 @@ export default function RidesPage() {
             <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest ml-1">Status</label>
             <select 
               value={filters.status}
-              onChange={(e) => setFilters({...filters, status: e.target.value})}
+              onChange={(e) => setFilters({...filters, status: e.target.value as any})}
               className="w-full h-10 px-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-zinc-950 transition-all"
             >
               <option value="">All Statuses</option>
@@ -608,7 +591,12 @@ export default function RidesPage() {
                   </div>
                 </div>
 
-                {detailedRide.pricing_audit && <PricingInspector audit={detailedRide.pricing_audit} />}
+                {detailedRide.pricing_audit && (
+                  <PricingInspector 
+                    audit={detailedRide.pricing_audit} 
+                    price_per_seat={detailedRide.price_per_seat} 
+                  />
+                )}
 
                 <div className="p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-6">
                    <div className="flex items-start gap-4">
@@ -821,7 +809,7 @@ export default function RidesPage() {
                         <div className={`absolute -left-[24px] top-1 w-3 h-3 rounded-full border-2 ${i === 0 ? 'bg-zinc-950 dark:bg-white border-zinc-950 dark:border-white' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700'}`} />
                         <div className="flex items-center justify-between">
                            <p className="text-[10px] font-black text-zinc-950 dark:text-white uppercase tracking-widest">{h.status.replace('_', ' ')}</p>
-                           <p className="text-[8px] font-bold text-zinc-400 tabular-nums">{new Date(h.created_at).toLocaleString()}</p>
+                           <p className="text-[8px] font-bold text-zinc-400 tabular-nums">{new Date(h.created_at || h.timestamp).toLocaleString()}</p>
                         </div>
                         {h.notes && <p className="text-[10px] text-zinc-500 font-medium mt-1 italic">"{h.notes}"</p>}
                       </div>

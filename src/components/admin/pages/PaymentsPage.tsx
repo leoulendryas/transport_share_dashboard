@@ -1,13 +1,12 @@
+// src/components/admin/pages/PaymentsPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Payment } from '@/types/user';
+import { useState } from 'react';
+import useSWR from 'swr';
+import { Payment, PaymentStatus } from '@/types/admin';
 import { 
-  Wallet, 
   Check, 
-  Clock, 
   Download, 
-  CreditCard,
   ExternalLink,
   RefreshCw,
   Navigation,
@@ -18,55 +17,51 @@ import {
   DollarSign,
   Hash
 } from 'lucide-react';
-import { getPayments, updatePaymentStatus } from '@/lib/api';
+import { paymentsApi, GetPaymentsParams } from '@/lib/api/payments';
 import { useAuth } from '@/context/AuthContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { extractError } from '@/lib/api/errors';
 
 const ITEMS_PER_PAGE = 10;
 
 export default function PaymentsPage() {
   const { admin } = useAuth();
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'all'>('all');
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const fetchPayments = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const data = await getPayments(
-        currentPage, 
-        ITEMS_PER_PAGE, 
-        { status: filter === 'all' ? undefined : filter }
-      );
-      setPayments(data.results || []);
-      setTotal(data.pagination?.total || 0);
-    } catch (error) {
-      console.error('Failed to fetch payments', error);
-    } finally {
-      setLoading(false);
-    }
+  const params: GetPaymentsParams = {
+    page: currentPage,
+    limit: ITEMS_PER_PAGE,
+    status: statusFilter === 'all' ? undefined : statusFilter,
   };
 
-  useEffect(() => {
-    fetchPayments();
-  }, [admin, currentPage, filter]);
+  const { data, error, isLoading, mutate } = useSWR(
+    admin ? ['payments', params] : null,
+    () => paymentsApi.list(params),
+    { keepPreviousData: true }
+  );
+
+  const payments = data?.results || [];
+  const total = data?.pagination?.total || 0;
 
   const handleRelease = async (paymentId: number) => {
     if (!admin || !window.confirm('Release funds to driver? This action initiates a financial transfer sequence.')) return;
+    
+    setIsActionLoading(true);
     try {
-      await updatePaymentStatus(paymentId, undefined, true);
-      fetchPayments();
+      await paymentsApi.releaseManual(paymentId);
+      mutate();
       setSelectedPayment(null);
-    } catch (error) {
-      alert('Failed to release payment');
+    } catch (err) {
+      alert(extractError(err));
+    } finally {
+      setIsActionLoading(false);
     }
   };
   
@@ -81,7 +76,7 @@ export default function PaymentsPage() {
       header: 'Protocol Ref',
       accessor: (p: Payment) => (
         <div className="flex flex-col">
-           <span className="font-black uppercase tracking-tighter text-zinc-950 dark:text-white">#{p.payment_reference || `ID_${p.id}`}</span>
+           <span className="font-black uppercase tracking-tighter text-zinc-950 dark:text-white">#{p.reference || `ID_${p.id}`}</span>
            <span className="text-[10px] text-zinc-400 font-mono font-black tabular-nums">{new Date(p.created_at).toLocaleDateString()}</span>
         </div>
       )
@@ -106,7 +101,7 @@ export default function PaymentsPage() {
     {
       header: 'Status',
       accessor: (p: Payment) => (
-        <Badge variant={p.status === 'success' || p.released_to_driver ? 'success' : 'warning'}>
+        <Badge variant={p.status === 'success' || p.released_to_driver ? 'success' : p.status === 'failed' ? 'error' : 'warning'}>
           {p.status.toUpperCase()}
         </Badge>
       )
@@ -116,7 +111,13 @@ export default function PaymentsPage() {
       accessor: (p: Payment) => (
         <div className="flex justify-end gap-2">
           {p.status === 'success' && !p.released_to_driver && (
-            <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); handleRelease(p.id); }} className="h-8 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest">
+            <Button 
+              variant="primary" 
+              size="sm" 
+              disabled={isActionLoading}
+              onClick={(e) => { e.stopPropagation(); handleRelease(p.id); }} 
+              className="h-8 px-3 rounded-lg text-[9px] font-black uppercase tracking-widest"
+            >
               Authorize Release
             </Button>
           )}
@@ -155,16 +156,18 @@ export default function PaymentsPage() {
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3 w-full md:w-auto">
             <select
-              value={filter}
-              onChange={(e) => { setFilter(e.target.value as any); setCurrentPage(1); }}
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value as any); setCurrentPage(1); }}
               className="px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all cursor-pointer dark:text-zinc-200"
             >
               <option value="all">Full Ledger</option>
-              <option value="pending">Pending Auth</option>
-              <option value="completed">Authorized Payouts</option>
+              <option value="pending">Pending</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="refunded">Refunded</option>
             </select>
-            <Button variant="secondary" size="md" onClick={fetchPayments} className="h-11 rounded-xl">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <Button variant="secondary" size="md" onClick={() => mutate()} className="h-11 rounded-xl">
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
           <Button variant="secondary" size="md" className="gap-2 h-11 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest w-full md:w-auto">
@@ -175,7 +178,7 @@ export default function PaymentsPage() {
         <DataTable 
           columns={columns} 
           data={payments} 
-          loading={loading}
+          loading={isLoading}
           onRowClick={(p) => setSelectedPayment(p)}
           emptyMessage="Financial ledgers are empty."
         />
@@ -225,7 +228,7 @@ export default function PaymentsPage() {
                         <Hash className="w-4 h-4 text-zinc-400" />
                         <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Protocol Ref</p>
                      </div>
-                     <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tabular-nums">#{selectedPayment.payment_reference || selectedPayment.id}</p>
+                     <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tabular-nums">#{selectedPayment.reference || selectedPayment.id}</p>
                   </div>
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-3">
@@ -277,10 +280,11 @@ export default function PaymentsPage() {
                ) : selectedPayment.status === 'success' && (
                   <div className="pt-4 pb-10">
                     <Button 
+                      disabled={isActionLoading}
                       onClick={() => handleRelease(selectedPayment.id)}
                       className="w-full h-14 rounded-2xl shadow-2xl shadow-zinc-200 dark:shadow-none text-[10px] font-black uppercase tracking-[0.2em]"
                     >
-                      Authorize Final Transfer
+                      {isActionLoading ? <LoadingSpinner /> : 'Authorize Final Transfer'}
                     </Button>
                     <p className="text-[10px] text-zinc-400 text-center mt-4 font-bold uppercase tracking-widest px-10 leading-relaxed">
                       Final authorization initiates immutable capital release to commander.

@@ -1,50 +1,41 @@
+// src/components/admin/pages/SupportPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { Mail, MessageSquare, User, Clock, Reply, CheckCircle2 } from 'lucide-react';
-import { fetchSupportMessages, replyToSupport } from '@/lib/api';
+import { MessageSquare, User, Clock, Reply, CheckCircle2 } from 'lucide-react';
+import { supportApi } from '@/lib/api/support';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { extractError } from '@/lib/api/errors';
 
 export default function SupportPage() {
   const { admin } = useAuth();
-  const [messages, setMessages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
 
-  const load = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const data = await fetchSupportMessages(1, 50);
-      setMessages(data.results);
-    } catch (err) {
-      console.error('Failed to load support messages');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, mutate, isLoading } = useSWR(
+    admin ? 'support-messages' : null,
+    () => supportApi.list(1, 50)
+  );
 
-  useEffect(() => {
-    load();
-  }, [admin]);
+  const messages = data?.results || [];
 
   const handleReply = async () => {
     if (!admin || !selectedMessage || !replyText || isSending) return;
     setIsSending(true);
     try {
-      await replyToSupport(selectedMessage.id, replyText);
+      await supportApi.reply(selectedMessage.id, replyText);
       setReplyText('');
       setSelectedMessage(null);
-      await load();
+      mutate();
     } catch (err) {
-      alert('Failed to send reply');
+      alert(extractError(err));
     } finally {
       setIsSending(false);
     }
@@ -123,18 +114,12 @@ export default function SupportPage() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <LoadingSpinner />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Fetching Tickets</span>
-          </div>
-        ) : (
-          <DataTable 
-            data={messages} 
-            columns={columns} 
-            emptyMessage="All clear! No pending support requests."
-          />
-        )}
+        <DataTable 
+          data={messages} 
+          columns={columns} 
+          loading={isLoading}
+          emptyMessage="All clear! No pending support requests."
+        />
       </div>
 
       <Modal
@@ -175,9 +160,8 @@ export default function SupportPage() {
                 </div>
                 <div className="flex gap-3 justify-end">
                   <Button variant="secondary" onClick={() => setSelectedMessage(null)}>Cancel</Button>
-                  <Button onClick={handleReply} loading={isSending}>
-                    <Reply className="w-4 h-4 mr-2" />
-                    Send Resolution
+                  <Button onClick={handleReply} disabled={isSending}>
+                    {isSending ? <LoadingSpinner size="sm" /> : <><Reply className="w-4 h-4 mr-2" /> Send Resolution</>}
                   </Button>
                 </div>
               </div>

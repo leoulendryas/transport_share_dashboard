@@ -1,7 +1,6 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { SocketProvider } from '@/context/SocketContext';
 import RealTimeListener from '@/components/admin/RealTimeListener';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
@@ -32,7 +31,7 @@ export default function AdminLayout({
     );
   }
 
-  // If it's the login page, just render it without SocketProvider
+  // If it's the login page, just render it directly
   if (isLoginPage) {
     return <>{children}</>;
   }
@@ -40,9 +39,9 @@ export default function AdminLayout({
   if (!admin) return null;
 
   return (
-    <SocketProvider>
+    <>
       <RealTimeListener />
       {children}
-    </SocketProvider>
+    </>
   );
 }

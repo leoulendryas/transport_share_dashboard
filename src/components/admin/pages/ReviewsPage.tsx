@@ -1,45 +1,34 @@
+// src/components/admin/pages/ReviewsPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getReviews, deleteReview } from '@/lib/api';
+import { useState } from 'react';
+import useSWR from 'swr';
+import { contentApi } from '@/lib/api/content';
 import { useAuth } from '@/context/AuthContext';
-import { Review } from '@/types/user';
+import { Review } from '@/types/admin';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Star, Trash2, MessageSquare, Calendar, User } from 'lucide-react';
+import { Star, Trash2, Calendar, User } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { extractError } from '@/lib/api/errors';
 
 export default function ReviewsPage() {
   const { admin } = useAuth();
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
   const [minRating, setMinRating] = useState<number | undefined>(undefined);
 
-  const loadReviews = async () => {
-    if (!admin) return;
-    setLoading(true);
-    try {
-      const data = await getReviews(1, 50, minRating);
-      setReviews(data);
-    } catch (error) {
-      console.error('Failed to load reviews', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadReviews();
-  }, [admin, minRating]);
+  const { data: reviews = [], mutate, isLoading } = useSWR(
+    admin ? ['reviews', minRating] : null,
+    () => contentApi.listReviews(1, 50, minRating)
+  );
 
   const handleDelete = async (id: number) => {
     if (!admin || !confirm('Are you sure you want to delete this review? This action is permanent.')) return;
     try {
-      await deleteReview(id);
-      setReviews(prev => prev.filter(r => r.id !== id));
-    } catch (error) {
-      alert('Failed to delete review');
+      await contentApi.deleteReview(id);
+      mutate();
+    } catch (err) {
+      alert(extractError(err));
     }
   };
 
@@ -133,18 +122,12 @@ export default function ReviewsPage() {
       </div>
 
       <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
-            <LoadingSpinner />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 animate-pulse">Scanning Reputation Data</span>
-          </div>
-        ) : (
-          <DataTable 
-            data={reviews} 
-            columns={columns} 
-            emptyMessage="No reviews found matching your criteria."
-          />
-        )}
+        <DataTable 
+          data={reviews} 
+          columns={columns} 
+          loading={isLoading}
+          emptyMessage="No reviews found matching your criteria."
+        />
       </div>
     </div>
   );
