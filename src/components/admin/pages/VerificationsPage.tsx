@@ -36,7 +36,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 type TabType = 'id' | 'license' | 'vehicles';
 
 export default function VerificationsPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('id');
   const [idVerifications, setIdVerifications] = useState<User[]>([]);
   const [licenseVerifications, setLicenseVerifications] = useState<User[]>([]);
@@ -46,22 +46,22 @@ export default function VerificationsPage() {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   useEffect(() => {
-    if (token) {
+    if (admin) {
       fetchData();
     }
-  }, [token, activeTab]);
+  }, [admin, activeTab]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       if (activeTab === 'id') {
-        const data = await getPendingVerifications(token!);
+        const data = await getPendingVerifications();
         setIdVerifications(data.results);
       } else if (activeTab === 'license') {
-        const data = await getPendingLicenses(token!);
+        const data = await getPendingLicenses();
         setLicenseVerifications(data as any);
       } else if (activeTab === 'vehicles') {
-        const data = await getPendingVehicles(token!);
+        const data = await getPendingVehicles();
         setVehicleVerifications(data);
       }
     } catch (error) {
@@ -72,8 +72,6 @@ export default function VerificationsPage() {
   };
 
   const handleAction = async (type: 'approve' | 'reject', itemType: TabType, id: number) => {
-    if (!token) return;
-    
     let reason = '';
     if (type === 'reject') {
       reason = window.prompt('Provide a detailed reason for rejection. This will be logged and sent to the user:') || '';
@@ -83,14 +81,14 @@ export default function VerificationsPage() {
     setIsActionLoading(true);
     try {
       if (itemType === 'id') {
-        if (type === 'approve') await verifyUserID(token, id);
-        else await rejectVerification(token, id, reason);
+        if (type === 'approve') await verifyUserID(id);
+        else await rejectVerification(id, reason);
       } else if (itemType === 'license') {
-        if (type === 'approve') await approveLicense(token, id);
-        else await rejectVerification(token, id, reason); // Backend uses same rejection endpoint for id/license in some logic, or it clears URL
+        if (type === 'approve') await approveLicense(id);
+        else await rejectVerification(id, reason); // Backend uses same rejection endpoint for id/license in some logic, or it clears URL
       } else if (itemType === 'vehicles') {
-        if (type === 'approve') await approveVehicle(token, id);
-        else await rejectVehicle(token, id, reason);
+        if (type === 'approve') await approveVehicle(id);
+        else await rejectVehicle(id, reason);
       }
       setSelectedItem(null);
       fetchData();

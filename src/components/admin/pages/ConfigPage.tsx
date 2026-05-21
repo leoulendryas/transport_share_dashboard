@@ -8,26 +8,26 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 
 export default function ConfigPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
-    getConfig(token)
+    if (!admin) return;
+    getConfig()
       .then(setConfig)
       .catch(err => console.error('Failed to load config', err))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [admin]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!admin) return;
     
     setIsSaving(true);
     try {
-      await updateConfig(token, config);
+      await updateConfig(config);
       alert('System configuration updated successfully.');
     } catch (error) {
       alert('Failed to save configuration');

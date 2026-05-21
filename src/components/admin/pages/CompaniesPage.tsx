@@ -10,17 +10,17 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Company } from '@/types/user';
 
 export default function CompaniesPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const load = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
-      const data = await getCompanies(token);
+      const data = await getCompanies();
       setCompanies(data);
     } catch (error) {
       console.error('Failed to load companies', error);
@@ -31,15 +31,15 @@ export default function CompaniesPage() {
 
   useEffect(() => {
     load();
-  }, [token]);
+  }, [admin]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !name || isSubmitting) return;
+    if (!admin || !name || isSubmitting) return;
     
     setIsSubmitting(true);
     try {
-      await createCompany(token, name);
+      await createCompany(name);
       setName('');
       await load();
     } catch (error) {
@@ -50,9 +50,9 @@ export default function CompaniesPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!token || !confirm('Are you sure you want to delete this company?')) return;
+    if (!admin || !confirm('Are you sure you want to delete this company?')) return;
     try {
-      await deleteCompany(token, id);
+      await deleteCompany(id);
       await load();
     } catch (error) {
       alert('Failed to delete company');

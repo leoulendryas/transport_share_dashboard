@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 
 export default function SosAlertsPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [alerts, setAlerts] = useState<SOSAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<SOSAlert | null>(null);
@@ -36,10 +36,10 @@ export default function SosAlertsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchAlerts = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
-      const data = await getSosAlerts(token);
+      const data = await getSosAlerts();
       setAlerts(data || []);
     } catch (error) {
       console.error('Failed to fetch SOS alerts');
@@ -50,13 +50,13 @@ export default function SosAlertsPage() {
 
   useEffect(() => {
     fetchAlerts();
-  }, [token]);
+  }, [admin]);
 
   const handleResolve = async () => {
-    if (!token || !selectedAlert) return;
+    if (!admin || !selectedAlert) return;
     setIsSubmitting(true);
     try {
-      await resolveSos(token, selectedAlert.id, adminNotes);
+      await resolveSos(selectedAlert.id, adminNotes);
       setIsResolving(false);
       setSelectedAlert(null);
       setAdminNotes('');

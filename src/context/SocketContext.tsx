@@ -17,14 +17,15 @@ const SocketContext = createContext<SocketContextType>({
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    if (!token) return;
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('access_token') : null;
+    if (!admin || !token) return;
 
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
     // Remove /api from URL if it exists for socket connection
     const socketUrl = API_BASE_URL.replace(/\/api$/, '');
 

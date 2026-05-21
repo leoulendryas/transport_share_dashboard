@@ -29,7 +29,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 const ITEMS_PER_PAGE = 10;
 
 export default function PaymentsPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -38,11 +38,10 @@ export default function PaymentsPage() {
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   const fetchPayments = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
       const data = await getPayments(
-        token, 
         currentPage, 
         ITEMS_PER_PAGE, 
         filter === 'all' ? undefined : filter
@@ -58,12 +57,12 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     fetchPayments();
-  }, [token, currentPage, filter]);
+  }, [admin, currentPage, filter]);
 
   const handleRelease = async (paymentId: number) => {
-    if (!token || !window.confirm('Release funds to driver? This action initiates a financial transfer sequence.')) return;
+    if (!admin || !window.confirm('Release funds to driver? This action initiates a financial transfer sequence.')) return;
     try {
-      await updatePaymentStatus(token, paymentId, undefined, true);
+      await updatePaymentStatus(paymentId, undefined, true);
       fetchPayments();
       setSelectedPayment(null);
     } catch (error) {

@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function ReportsPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -39,10 +39,10 @@ export default function ReportsPage() {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   const fetchReports = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
-      const data = await getReports(token, currentPage, 10, filter === 'all' ? undefined : filter);
+      const data = await getReports(currentPage, 10, filter === 'all' ? undefined : filter);
       setReports(data.results);
       setTotal(data.pagination.total);
     } catch (error) {
@@ -54,16 +54,16 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchReports();
-  }, [token, currentPage, filter]);
+  }, [admin, currentPage, filter]);
 
   const handleResolve = async (id: number, status: 'resolved' | 'dismissed') => {
-    if (!token) return;
+    if (!admin) return;
     const notes = window.prompt(`Provide administrative notes for ${status} status:`) || '';
     if (notes === null) return;
 
     setIsActionLoading(true);
     try {
-      await resolveReport(token, id, status, notes);
+      await resolveReport(id, status, notes);
       setSelectedReport(null);
       fetchReports();
     } catch (error) {

@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { admin, token, loading: authLoading } = useAuth();
+  const { admin, loading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
 
@@ -41,10 +41,10 @@ export default function DashboardPage() {
 
   const router = useRouter();
 
-  const fetchStats = async (authToken: string) => {
+  const fetchStats = async () => {
     setIsLoading(true);
     try {
-      const statsData = await getDashboardStats(authToken);
+      const statsData = await getDashboardStats();
       setStats(statsData);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
@@ -54,16 +54,16 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && admin && token) {
-      fetchStats(token);
+    if (!authLoading && admin) {
+      fetchStats();
     }
-  }, [admin, authLoading, token]);
+  }, [admin, authLoading]);
 
   useEffect(() => {
-    if (!authLoading && (!admin || !token)) {
+    if (!authLoading && !admin) {
       router.push('/admin/login');
     }
-  }, [admin, authLoading, token, router]);
+  }, [admin, authLoading, router]);
 
   if (authLoading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-white dark:bg-zinc-950 gap-4">
@@ -84,7 +84,7 @@ export default function DashboardPage() {
               ? "Real-time metrics and system health monitoring." 
               : `Manage your ${activeTab} and platform operations.`
           }
-          onRefresh={() => token && fetchStats(token)} 
+          onRefresh={() => fetchStats()} 
         />
         
         <main className="flex-1 overflow-y-auto p-6 lg:p-10 space-y-10">

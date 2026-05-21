@@ -31,7 +31,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 const ITEMS_PER_PAGE = 10;
 
 export default function RidesPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,10 +44,10 @@ export default function RidesPage() {
   const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'chat'>('info');
 
   const fetchRides = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
-      const data = await getRides(token, currentPage, ITEMS_PER_PAGE);
+      const data = await getRides(currentPage, ITEMS_PER_PAGE);
       setRides(data.results || []);
       setTotal(data.pagination?.total || 0);
     } catch (error) {
@@ -59,24 +59,24 @@ export default function RidesPage() {
 
   useEffect(() => {
     fetchRides();
-  }, [token, currentPage]);
+  }, [admin, currentPage]);
 
   useEffect(() => {
-    if (selectedRideId !== null && token) {
+    if (selectedRideId !== null && admin) {
       fetchRideDetails(selectedRideId);
     } else {
       setDetailedRide(null);
       setMessages([]);
       setActiveDetailTab('info');
     }
-  }, [selectedRideId, token]);
+  }, [selectedRideId, admin]);
 
   const fetchRideDetails = async (rideId: number) => {
     setLoadingDetails(true);
     try {
       const [rideData, msgData] = await Promise.all([
-        getRideById(token!, rideId),
-        getRideMessages(token!, rideId)
+        getRideById(rideId),
+        getRideMessages(rideId)
       ]);
       setDetailedRide(rideData);
       setMessages(msgData || []);
@@ -90,9 +90,9 @@ export default function RidesPage() {
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
 
   const handleCancel = async (rideId: number) => {
-    if (!token || !window.confirm('Are you sure you want to cancel this ride? This will notify all participants.')) return;
+    if (!admin || !window.confirm('Are you sure you want to cancel this ride? This will notify all participants.')) return;
     try {
-      await adminCancelRide(token, rideId);
+      await adminCancelRide(rideId);
       setSelectedRideId(null);
       fetchRides();
     } catch (error) {

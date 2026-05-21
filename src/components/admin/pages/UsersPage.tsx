@@ -37,7 +37,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 const MemberLevels = ['standard', 'silver', 'gold', 'platinum'];
 
 export default function UsersPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,10 +48,10 @@ export default function UsersPage() {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchUsers = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
-      const data = await getUsers(token, 1, 100, searchTerm || undefined, filterBanned === 'all' ? undefined : filterBanned === 'banned');
+      const data = await getUsers(1, 100, searchTerm || undefined, filterBanned === 'all' ? undefined : filterBanned === 'banned');
       setUsers(data.results);
     } catch (error) {
       console.error('Failed to fetch users');
@@ -62,20 +62,20 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, [token, filterBanned]);
+  }, [admin, filterBanned]);
 
   useEffect(() => {
-    if (selectedUserId !== null && token) {
+    if (selectedUserId !== null && admin) {
       fetchUserDetails(selectedUserId);
     } else {
       setDetailedUser(null);
     }
-  }, [selectedUserId, token]);
+  }, [selectedUserId, admin]);
 
   const fetchUserDetails = async (userId: number) => {
     setLoadingDetails(true);
     try {
-      const data = await getUserById(token!, userId);
+      const data = await getUserById(userId);
       setDetailedUser(data);
     } catch (error) {
       console.error('Failed to fetch user details');
@@ -85,10 +85,10 @@ export default function UsersPage() {
   };
 
   const handleToggleAdmin = async (user: User) => {
-    if (!token) return;
+    if (!admin) return;
     setIsUpdating(true);
     try {
-      await toggleAdminStatus(token, user.id, !user.is_admin);
+      await toggleAdminStatus(user.id, !user.is_admin);
       if (detailedUser && detailedUser.id === user.id) {
         setDetailedUser({ ...detailedUser, is_admin: !user.is_admin });
       }
@@ -101,16 +101,16 @@ export default function UsersPage() {
   };
 
   const handleToggleBan = async (user: User) => {
-    if (!token) return;
+    if (!admin) return;
     setIsUpdating(true);
     try {
       if (user.banned) {
-        await unbanUser(token, user.id);
+        await unbanUser(user.id);
         if (detailedUser && detailedUser.id === user.id) {
           setDetailedUser({ ...detailedUser, banned: false });
         }
       } else {
-        await banUser(token, user.id);
+        await banUser(user.id);
         if (detailedUser && detailedUser.id === user.id) {
           setDetailedUser({ ...detailedUser, banned: true });
         }
@@ -124,10 +124,10 @@ export default function UsersPage() {
   };
 
   const handleMemberLevelChange = async (userId: number, level: string) => {
-    if (!token) return;
+    if (!admin) return;
     setIsUpdating(true);
     try {
-      await updateMemberLevel(token, userId, level);
+      await updateMemberLevel(userId, level);
       if (detailedUser && detailedUser.id === userId) {
         setDetailedUser({ ...detailedUser, member_level: level });
       }

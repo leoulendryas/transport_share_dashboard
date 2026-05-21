@@ -11,16 +11,16 @@ import { Star, Trash2, MessageSquare, Calendar, User } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function ReviewsPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [minRating, setMinRating] = useState<number | undefined>(undefined);
 
   const loadReviews = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
-      const data = await getReviews(token, 1, 50, minRating);
+      const data = await getReviews(1, 50, minRating);
       setReviews(data);
     } catch (error) {
       console.error('Failed to load reviews', error);
@@ -31,12 +31,12 @@ export default function ReviewsPage() {
 
   useEffect(() => {
     loadReviews();
-  }, [token, minRating]);
+  }, [admin, minRating]);
 
   const handleDelete = async (id: number) => {
-    if (!token || !confirm('Are you sure you want to delete this review? This action is permanent.')) return;
+    if (!admin || !confirm('Are you sure you want to delete this review? This action is permanent.')) return;
     try {
-      await deleteReview(token, id);
+      await deleteReview(id);
       setReviews(prev => prev.filter(r => r.id !== id));
     } catch (error) {
       alert('Failed to delete review');

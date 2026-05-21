@@ -9,13 +9,10 @@ interface Admin {
   id: number;
   name: string;
   role: string;
-  token: string;
-  refreshToken: string;
 }
 
 interface AuthContextType {
   admin: Admin | null;
-  token: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
@@ -26,16 +23,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [admin, setAdmin] = useState<Admin | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const storedAdmin = localStorage.getItem('admin');
-    if (storedAdmin) {
-      const adminData = JSON.parse(storedAdmin);
-      setAdmin(adminData);
-      setToken(adminData.token);
+    const token = sessionStorage.getItem('access_token');
+    
+    if (storedAdmin && token) {
+      setAdmin(JSON.parse(storedAdmin));
+    } else if (!window.location.pathname.includes('/login')) {
+      // If no token and not on login page, we might want to logout or just stay as is
+      // depending on how protected routes are handled.
     }
     setLoading(false);
   }, []);
@@ -48,12 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: response.user.id,
         name: `${response.user.first_name} ${response.user.last_name}`,
         role: 'admin',
-        token: response.access_token,
-        refreshToken: response.refresh_token
       };
       
       setAdmin(adminData);
-      setToken(response.access_token);
+      sessionStorage.setItem('access_token', response.access_token);
+      sessionStorage.setItem('refresh_token', response.refresh_token);
       localStorage.setItem('admin', JSON.stringify(adminData));
       return true;
     } catch (error: any) {
@@ -64,26 +62,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setAdmin(null);
-    setToken(null);
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
     localStorage.removeItem('admin');
     router.push('/admin/login');
   };
 
   const refreshAuthToken = async (): Promise<string | null> => {
-    if (!admin?.refreshToken) return null;
+    const currentRefreshToken = sessionStorage.getItem('refresh_token');
+    if (!currentRefreshToken) return null;
     
     try {
-      const response = await refreshToken(admin.refreshToken);
+      const response = await refreshToken(currentRefreshToken);
       
-      const adminData = {
-        ...admin,
-        token: response.access_token,
-        refreshToken: response.refresh_token
-      };
+      sessionStorage.setItem('access_token', response.access_token);
+      sessionStorage.setItem('refresh_token', response.refresh_token);
       
-      setAdmin(adminData);
-      setToken(response.access_token);
-      localStorage.setItem('admin', JSON.stringify(adminData));
       return response.access_token;
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -95,7 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ 
       admin, 
-      token,
       login, 
       logout, 
       loading,
@@ -113,3 +106,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

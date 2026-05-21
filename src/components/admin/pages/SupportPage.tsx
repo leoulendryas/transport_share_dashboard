@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 
 export default function SupportPage() {
-  const { token } = useAuth();
+  const { admin } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
@@ -19,10 +19,10 @@ export default function SupportPage() {
   const [isSending, setIsSending] = useState(false);
 
   const load = async () => {
-    if (!token) return;
+    if (!admin) return;
     setLoading(true);
     try {
-      const data = await fetchSupportMessages(token, 1, 50);
+      const data = await fetchSupportMessages(1, 50);
       setMessages(data.results);
     } catch (err) {
       console.error('Failed to load support messages');
@@ -33,13 +33,13 @@ export default function SupportPage() {
 
   useEffect(() => {
     load();
-  }, [token]);
+  }, [admin]);
 
   const handleReply = async () => {
-    if (!token || !selectedMessage || !replyText || isSending) return;
+    if (!admin || !selectedMessage || !replyText || isSending) return;
     setIsSending(true);
     try {
-      await replyToSupport(token, selectedMessage.id, replyText);
+      await replyToSupport(selectedMessage.id, replyText);
       setReplyText('');
       setSelectedMessage(null);
       await load();
