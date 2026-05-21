@@ -38,6 +38,17 @@ import { useNotifications } from '@/context/NotificationContext';
 
 type TabType = 'id' | 'license' | 'vehicles';
 
+const formatWaitingTime = (dateString: string | null) => {
+  if (!dateString) return 'NEW';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'TODAY';
+  return `WAITING ${diffDays}D`;
+};
+
 export default function VerificationsPage() {
   const { admin } = useAuth();
   const { addNotification } = useNotifications();
@@ -62,13 +73,22 @@ export default function VerificationsPage() {
     try {
       if (activeTab === 'id') {
         const data = await getPendingVerifications();
-        setIdVerifications(data.results);
+        const sorted = (data.results || []).sort((a: User, b: User) => 
+          new Date(a.verification_submitted_at || 0).getTime() - new Date(b.verification_submitted_at || 0).getTime()
+        );
+        setIdVerifications(sorted);
       } else if (activeTab === 'license') {
         const data = await getPendingLicenses();
-        setLicenseVerifications(data.results);
+        const sorted = (data.results || []).sort((a: User, b: User) => 
+          new Date(a.verification_submitted_at || 0).getTime() - new Date(b.verification_submitted_at || 0).getTime()
+        );
+        setLicenseVerifications(sorted);
       } else if (activeTab === 'vehicles') {
         const data = await getPendingVehicles();
-        setVehicleVerifications(data);
+        const sorted = (data || []).sort((a: Vehicle, b: Vehicle) => 
+          new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+        );
+        setVehicleVerifications(sorted);
       }
     } catch (error) {
       console.error('Failed to fetch verifications');
@@ -160,9 +180,14 @@ export default function VerificationsPage() {
     {
       header: 'Submitted',
       accessor: (v: User) => (
-        <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] font-black uppercase tracking-widest tabular-nums">
-          <Calendar className="w-3 h-3" />
-          {v.verification_submitted_at ? new Date(v.verification_submitted_at).toLocaleDateString() : 'UNKNOWN'}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-zinc-500 text-[10px] font-black uppercase tracking-widest tabular-nums">
+            <Calendar className="w-3 h-3" />
+            {v.verification_submitted_at ? new Date(v.verification_submitted_at).toLocaleDateString() : 'UNKNOWN'}
+          </div>
+          <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-amber-50 text-amber-600 border-amber-100">
+             {formatWaitingTime(v.verification_submitted_at)}
+          </Badge>
         </div>
       )
     },

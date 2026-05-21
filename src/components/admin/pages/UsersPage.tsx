@@ -1,7 +1,5 @@
-'use client';
-
 import { useState, useEffect } from 'react';
-import { User, DetailedUser } from '@/types/user';
+import { User, DetailedUser, Company } from '@/types/user';
 import { 
   Ban, 
   Search, 
@@ -24,7 +22,10 @@ import {
   Activity,
   Key,
   ExternalLink,
-  Info
+  Info,
+  DollarSign,
+  Building2,
+  Clock
 } from 'lucide-react';
 import { 
   getUsers, 
@@ -39,7 +40,8 @@ import {
   rejectLicense,
   approveVehicle,
   rejectVehicle,
-  unsuspendUser
+  unsuspendUser,
+  getCompanies
 } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
@@ -54,12 +56,38 @@ const MemberLevels = ['Newcomer', 'Standard', 'Premium', 'Elite'];
 
 const getMemberLevelColor = (level?: string) => {
   switch (level?.toLowerCase()) {
-    case 'newcomer': return 'bg-zinc-100 text-zinc-500';
-    case 'standard': return 'bg-blue-50 text-blue-600';
-    case 'premium': return 'bg-amber-50 text-amber-600';
-    case 'elite': return 'bg-purple-50 text-purple-600';
-    default: return 'bg-zinc-100 text-zinc-500';
+    case 'newcomer': return 'bg-zinc-100 text-zinc-500 border-zinc-200';
+    case 'standard': return 'bg-blue-50 text-blue-600 border-blue-100';
+    case 'premium': return 'bg-amber-50 text-amber-600 border-amber-200'; // Gold
+    case 'elite': return 'bg-purple-50 text-purple-600 border-purple-100';
+    default: return 'bg-zinc-100 text-zinc-500 border-zinc-200';
   }
+};
+
+const getPreferenceLabel = (key: string, value: number) => {
+  const labels: Record<string, string[]> = {
+    chattiness_pref: ['Silent', 'Quiet', 'Neutral', 'Chatty', 'Very social'],
+    music_pref: ['No music', 'Soft music', 'Neutral', 'Loud music', 'Any music'],
+    smoking_pref: ['No smoking', 'Tolerant', 'Neutral', 'Tolerant', 'OK with smoking'],
+    pets_pref: ['No pets', 'Tolerant', 'Neutral', 'Tolerant', 'OK with pets'],
+    social_vibe: ['Introverted', 'Quiet', 'Neutral', 'Outgoing', 'Very social']
+  };
+  return labels[key]?.[value - 1] || 'Neutral';
+};
+
+const formatRelativeTime = (dateString: string | null) => {
+  if (!dateString) return 'VOID';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMin < 1) return 'JUST NOW';
+  if (diffMin < 60) return `${diffMin}M AGO`;
+  if (diffHours < 24) return `${diffHours}H AGO`;
+  return `${diffDays}D AGO`;
 };
 
 const isCurrentlySuspended = (user: User): boolean =>
@@ -74,6 +102,7 @@ export default function UsersPage() {
   const [filterBanned, setFilterBanned] = useState<'all' | 'banned' | 'active'>('all');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [detailedUser, setDetailedUser] = useState<DetailedUser | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: 'id' | 'license' | 'vehicle', id: number | null }>({ open: false, type: 'id', id: null });
@@ -92,6 +121,19 @@ export default function UsersPage() {
     }
   };
 
+  const fetchInitialData = async () => {
+    try {
+      const comps = await getCompanies();
+      setCompanies(comps || []);
+    } catch (error) {
+      console.error('Failed to fetch companies');
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [admin]);
+
   useEffect(() => {
     fetchUsers();
   }, [admin, filterBanned]);
@@ -109,6 +151,9 @@ export default function UsersPage() {
     try {
       const data = await getUserById(userId);
       setDetailedUser(data);
+      if (data.rejection_reason) {
+        setRejectionReason(data.rejection_reason);
+      }
     } catch (error) {
       addNotification('warning', 'Access Denied', 'Failed to retrieve deep profile data.');
     } finally {
@@ -223,7 +268,7 @@ export default function UsersPage() {
     try {
       await updateMemberLevel(userId, level);
       if (detailedUser && detailedUser.id === userId) {
-        setDetailedUser({ ...detailedUser, member_level: level });
+        setDetailedUser({ ...detailedUser, member_level: level as any });
       }
       fetchUsers();
     } catch (error) {
@@ -249,33 +294,30 @@ export default function UsersPage() {
       header: 'User Profile',
       accessor: (user: User) => (
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[11px] font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-[11px] font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
             {user.profile_photo ? (
               <img src={user.profile_photo} alt="P" className="w-full h-full object-cover" />
             ) : (
               `${user.first_name?.[0] || '?'}${user.last_name?.[0] || '?'}`
             )}
+            {user.oauth_provider === 'google' && (
+               <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-white border border-zinc-200 rounded-full flex items-center justify-center shadow-sm">
+                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+               </div>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-zinc-900 dark:text-zinc-100">{user.first_name || user.email.split('@')[0]} {user.last_name}</span>
-              {user.is_admin && <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-zinc-950 text-white border-none">ADMIN</Badge>}
-              {user.is_driver && <Car className="w-3 h-3 text-blue-500" />}
+              {user.is_admin && <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-purple-100 text-purple-600 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800">ADMIN</Badge>}
+              {user.is_driver && <Badge variant="zinc" className="h-4 px-1.5 text-[8px] bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800"><Car className="w-2 h-2 mr-1" /> DRIVER</Badge>}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
                <span className="text-[10px] text-zinc-400 font-mono font-bold tracking-tighter">NODE_{user.id}</span>
                <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-               <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md ${getMemberLevelColor(user.member_level)}`}>
+               <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${getMemberLevelColor(user.member_level)}`}>
                  {user.member_level || 'Newcomer'}
                </span>
-               {user.oauth_provider === 'google' && (
-                 <div className="flex items-center gap-1 ml-1">
-                   <span className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-                   <div className="w-3 h-3 bg-white border border-zinc-200 rounded-full flex items-center justify-center">
-                     <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
-                   </div>
-                 </div>
-               )}
             </div>
           </div>
         </div>
@@ -301,13 +343,32 @@ export default function UsersPage() {
       )
     },
     {
+      header: 'Finance',
+      accessor: (user: User) => (
+        <div className="flex flex-col gap-0.5">
+           {user.preferred_bank ? (
+             <>
+               <span className="text-[10px] font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tighter flex items-center gap-1">
+                 <Building2 className="w-2.5 h-2.5 text-emerald-500" /> {user.preferred_bank}
+               </span>
+               <span className="text-[9px] text-zinc-400 font-mono tabular-nums">{user.bank_account_number}</span>
+             </>
+           ) : (
+             <span className="text-[9px] text-zinc-300 font-black uppercase tracking-widest italic">No Payout Data</span>
+           )}
+        </div>
+      )
+    },
+    {
       header: 'Activity',
       accessor: (user: User) => (
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 tabular-nums uppercase tracking-tight">Seen: {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'VOID'}</span>
+            <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 tabular-nums uppercase tracking-tight flex items-center gap-1">
+              <Clock className="w-2.5 h-2.5 text-zinc-400" /> {formatRelativeTime(user.last_login)}
+            </span>
             {user.cancellation_count && user.cancellation_count > 5 && (
-              <AlertCircle className="w-3 h-3 text-amber-500" />
+              <AlertCircle className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
             )}
           </div>
           <span className="text-[10px] text-zinc-400 font-medium">Joined: {new Date(user.created_at).toLocaleDateString()}</span>
@@ -394,7 +455,7 @@ export default function UsersPage() {
             </div>
           </div>
         ) : detailedUser ? (
-          <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
+          <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
             <div className="flex items-center gap-5">
               <div className="w-20 h-20 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xl font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
                 {detailedUser.profile_photo ? (
@@ -476,7 +537,7 @@ export default function UsersPage() {
                   {detailedUser.intelligence_audit.potential_conflicts.length > 0 && (
                     <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-center gap-3">
                       <ShieldAlert className="w-5 h-5 text-rose-500" />
-                      <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Suspicious overlapping bookings detected</p>
+                      <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Suspicious overlapping bookings detected ({detailedUser.intelligence_audit.potential_conflicts.length})</p>
                     </div>
                   )}
                 </div>
@@ -533,7 +594,7 @@ export default function UsersPage() {
                         disabled={isUpdating}
                         value={detailedUser.member_level || 'Newcomer'}
                         onChange={(e) => handleMemberLevelChange(detailedUser.id, e.target.value)}
-                        className={`w-full bg-transparent text-xs font-black uppercase tracking-wider outline-none cursor-pointer ${getMemberLevelColor(detailedUser.member_level)} px-2 py-1 rounded-lg`}
+                        className={`w-full bg-transparent text-xs font-black uppercase tracking-wider outline-none cursor-pointer ${getMemberLevelColor(detailedUser.member_level)} px-2 py-1 rounded-lg border`}
                      >
                         {MemberLevels.map(level => (
                            <option key={level} value={level} className="bg-white dark:bg-zinc-950 text-zinc-900 dark:text-white">{level}</option>
@@ -557,6 +618,7 @@ export default function UsersPage() {
                            <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{detailedUser.last_login ? new Date(detailedUser.last_login).toLocaleString() : 'VOID'}</p>
                         </div>
                      </div>
+                     <Badge variant="zinc" className="h-5 px-2 text-[8px] font-black uppercase">{formatRelativeTime(detailedUser.last_login)}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-3">
@@ -610,6 +672,12 @@ export default function UsersPage() {
                   <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/50 rounded-xl">
                     <p className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Previous Rejection Protocol</p>
                     <p className="text-[10px] font-bold text-rose-500">{detailedUser.rejection_reason}</p>
+                  </div>
+               )}
+               {!detailedUser.id_verified && detailedUser.id_image_url && (
+                  <div className="flex gap-2">
+                    <Button onClick={() => handleApprove('id', detailedUser.id)} disabled={isUpdating} size="sm" className="flex-1 text-[9px] font-black uppercase tracking-widest h-10">Authorize Identity</Button>
+                    <Button variant="destructive" onClick={() => handleReject('id', detailedUser.id)} disabled={isUpdating} size="sm" className="flex-1 text-[9px] font-black uppercase tracking-widest h-10">Terminate Identity</Button>
                   </div>
                )}
             </div>
@@ -669,7 +737,14 @@ export default function UsersPage() {
                         <Car className="w-4 h-4 text-zinc-900 dark:text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tracking-tight">{v.make} {v.model} ({v.year || '?'})</p>
+                        <div className="flex items-center justify-between">
+                           <p className="text-xs font-black text-zinc-950 dark:text-white uppercase tracking-tight">{v.make} {v.model} ({v.year || '?'})</p>
+                           {v.company_id && (
+                             <Badge variant="zinc" className="h-4 px-1.5 text-[7px] font-black uppercase bg-zinc-950 text-white border-none">
+                                {companies.find(c => c.id === v.company_id)?.name || 'Fleet'}
+                             </Badge>
+                           )}
+                        </div>
                         <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">{v.license_plate} • {v.color}</p>
                       </div>
                       <Badge variant={v.is_verified ? 'success' : 'zinc'}>
@@ -702,13 +777,15 @@ export default function UsersPage() {
             {detailedUser.is_driver && (detailedUser.preferred_bank || detailedUser.bank_account_number) && (
               <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Activity className="w-3.5 h-3.5" /> Payout Configuration
+                  <DollarSign className="w-3.5 h-3.5" /> Payout Configuration
                 </h4>
                 <div className="p-6 bg-emerald-50/30 dark:bg-emerald-950/10 border-2 border-emerald-100/50 dark:border-emerald-900/20 rounded-3xl space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Financial Institution</p>
-                      <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight">{detailedUser.preferred_bank || 'NOT_SPECIFIED'}</p>
+                      <p className="text-sm font-black text-zinc-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
+                         <Building2 className="w-4 h-4" /> {detailedUser.preferred_bank || 'NOT_SPECIFIED'}
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -725,19 +802,20 @@ export default function UsersPage() {
               </h4>
               <div className="grid grid-cols-2 gap-3">
                  {[
-                   { label: 'Social Vibe', value: detailedUser.social_vibe },
-                   { label: 'Chattiness', value: detailedUser.chattiness_pref },
-                   { label: 'Music Pref', value: detailedUser.music_pref },
-                   { label: 'Smoking Pref', value: detailedUser.smoking_pref },
-                   { label: 'Pets Pref', value: detailedUser.pets_pref },
+                   { label: 'Social Vibe', value: detailedUser.social_vibe, key: 'social_vibe' },
+                   { label: 'Chattiness', value: detailedUser.chattiness_pref, key: 'chattiness_pref' },
+                   { label: 'Music Pref', value: detailedUser.music_pref, key: 'music_pref' },
+                   { label: 'Smoking Pref', value: detailedUser.smoking_pref, key: 'smoking_pref' },
+                   { label: 'Pets Pref', value: detailedUser.pets_pref, key: 'pets_pref' },
                  ].map((pref, idx) => (
                    <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                       <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2">{pref.label}</p>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 mb-2">
                          {[1,2,3,4,5].map(v => (
                            <div key={v} className={`h-1.5 flex-1 rounded-full ${v <= (pref.value || 3) ? 'bg-zinc-950 dark:bg-white' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
                          ))}
                       </div>
+                      <p className="text-[9px] font-bold text-zinc-500 uppercase">{getPreferenceLabel(pref.key, pref.value || 3)}</p>
                    </div>
                  ))}
               </div>
