@@ -68,7 +68,7 @@ export default function VerificationsPage() {
         setLicenseVerifications(data.results);
       } else if (activeTab === 'vehicles') {
         const data = await getPendingVehicles();
-        setVehicleVerifications(data.results);
+        setVehicleVerifications(data);
       }
     } catch (error) {
       console.error('Failed to fetch verifications');

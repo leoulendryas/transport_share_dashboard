@@ -142,7 +142,7 @@ export const rejectLicense = async (userId: number, reason: string): Promise<{ m
   return handleResponse(response);
 };
 
-export const getPendingVehicles = async (page: number = 1, limit: number = 10): Promise<{ results: Vehicle[]; pagination: { page: number; limit: number; total: number } }> => {
+export const getPendingVehicles = async (page: number = 1, limit: number = 10): Promise<Vehicle[]> => {
   const response = await adminApi.get('/vehicles/pending', { params: { page, limit } });
   return handleResponse(response);
 };
