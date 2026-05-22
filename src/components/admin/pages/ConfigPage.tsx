@@ -7,11 +7,13 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Save, Percent, MapPin, Shield, Zap, Globe, Bell } from 'lucide-react';
 import { settingsApi } from '@/lib/api/settings';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { Button } from '@/components/ui/Button';
 import { extractError } from '@/lib/api/errors';
 
 export default function ConfigPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [localConfig, setLocalConfig] = useState<Record<string, string> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -33,9 +35,9 @@ export default function ConfigPage() {
     try {
       await settingsApi.update(localConfig);
       mutate();
-      alert('System configuration updated successfully.');
+      addNotification('success', 'Update Successful', 'System configuration updated successfully.');
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Update Failed', extractError(err));
     } finally {
       setIsSaving(false);
     }

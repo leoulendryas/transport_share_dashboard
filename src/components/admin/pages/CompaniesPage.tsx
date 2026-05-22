@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Building2, Plus, Trash2 } from 'lucide-react';
 import { companiesApi } from '@/lib/api/companies';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
 import { Company } from '@/types/admin';
@@ -14,6 +15,7 @@ import { extractError } from '@/lib/api/errors';
 
 export default function CompaniesPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,8 +33,9 @@ export default function CompaniesPage() {
       await companiesApi.create(name);
       setName('');
       mutate();
+      addNotification('success', 'Partner Added', `Company ${name} registered successfully.`);
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Registration Failed', extractError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -43,8 +46,9 @@ export default function CompaniesPage() {
     try {
       await companiesApi.delete(id);
       mutate();
+      addNotification('success', 'Partner Removed', 'Company has been successfully deleted.');
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Action Failed', extractError(err));
     }
   };
 

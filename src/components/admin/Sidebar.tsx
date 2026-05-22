@@ -34,6 +34,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
     { id: 'sos', label: 'SOS Alerts', icon: AlertTriangle },
     { id: 'support', label: 'Support', icon: LifeBuoy },
     { id: 'companies', label: 'Companies', icon: Building2 },
+    { id: 'audit', label: 'Audit Logs', icon: FileText },
     { id: 'config', label: 'Config', icon: Settings },
   ];
 

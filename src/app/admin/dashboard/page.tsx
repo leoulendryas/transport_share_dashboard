@@ -22,6 +22,7 @@ import CompaniesPage from '@/components/admin/pages/CompaniesPage';
 import ConfigPage from '@/components/admin/pages/ConfigPage';
 import ReviewsPage from '@/components/admin/pages/ReviewsPage';
 import SupportPage from '@/components/admin/pages/SupportPage';
+import AuditPage from '@/components/admin/pages/AuditPage';
 import DashboardCharts from '@/components/admin/DashboardCharts';
 import RealTimeListener from '@/components/admin/RealTimeListener';
 
@@ -35,7 +36,7 @@ import {
 export default function DashboardPage() {
   const { admin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'users' | 'rides' | 'verifications' | 'reports' | 'payments' | 'config' | 'sos' | 'companies' | 'reviews' | 'support'
+    'dashboard' | 'users' | 'rides' | 'verifications' | 'reports' | 'payments' | 'config' | 'sos' | 'companies' | 'reviews' | 'support' | 'audit'
   >('dashboard');
 
   const { data: stats, error, isLoading, mutate } = useSWR(
@@ -129,6 +130,7 @@ export default function DashboardPage() {
                 {activeTab === 'config' && <ConfigPage />}
                 {activeTab === 'reviews' && <ReviewsPage />}
                 {activeTab === 'support' && <SupportPage />}
+                {activeTab === 'audit' && <AuditPage />}
               </div>
             )}
           </ApiErrorBoundary>

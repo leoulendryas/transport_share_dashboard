@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { moderationApi } from '@/lib/api/moderation';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { SOSAlert } from '@/types/admin';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
@@ -25,6 +26,7 @@ import { extractError } from '@/lib/api/errors';
 
 export default function SosAlertsPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [selectedAlert, setSelectedAlert] = useState<SOSAlert | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
@@ -45,8 +47,9 @@ export default function SosAlertsPage() {
       setSelectedAlert(null);
       setAdminNotes('');
       mutate();
+      addNotification('success', 'SOS Resolved', 'Emergency signal has been neutralized.');
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Action Failed', extractError(err));
     } finally {
       setIsSubmitting(false);
     }

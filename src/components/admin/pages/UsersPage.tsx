@@ -94,6 +94,7 @@ export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBanned, setFilterBanned] = useState<'all' | 'banned' | 'active'>('all');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [activeDetailTab, setActiveDetailTab] = useState<'profile' | 'audit'>('profile');
   const [isUpdating, setIsUpdating] = useState(false);
   const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: 'id' | 'license' | 'vehicle', id: number | null }>({ open: false, type: 'id', id: null });
   const [rejectionReason, setRejectionReason] = useState('');
@@ -112,6 +113,11 @@ export default function UsersPage() {
   const { data: detailedUser, mutate: mutateDetails, isLoading: loadingDetails } = useSWR(
     admin && selectedUserId ? ['users', selectedUserId] : null,
     () => usersApi.get(selectedUserId!)
+  );
+
+  const { data: auditLogs = [], isLoading: loadingAudit } = useSWR(
+    admin && selectedUserId && activeDetailTab === 'audit' ? ['users', selectedUserId, 'audit'] : null,
+    () => usersApi.getAuditLogs(selectedUserId!)
   );
 
   const { data: companiesData } = useSWR(
@@ -394,7 +400,31 @@ export default function UsersPage() {
           </div>
         ) : detailedUser ? (
           <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
-            <div className="flex items-center gap-5">
+            {/* Tab Switcher */}
+            <div className="flex border-b border-zinc-100 dark:border-zinc-900">
+              <button 
+                onClick={() => setActiveDetailTab('profile')}
+                className={`flex-1 pb-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all relative ${activeDetailTab === 'profile' ? 'text-zinc-950 dark:text-white' : 'text-zinc-400'}`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <UserIcon className="w-3.5 h-3.5" /> Intelligence
+                </div>
+                {activeDetailTab === 'profile' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-950 dark:bg-white" />}
+              </button>
+              <button 
+                onClick={() => setActiveDetailTab('audit')}
+                className={`flex-1 pb-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all relative ${activeDetailTab === 'audit' ? 'text-zinc-950 dark:text-white' : 'text-zinc-400'}`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Activity className="w-3.5 h-3.5" /> Audit Trail
+                </div>
+                {activeDetailTab === 'audit' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-950 dark:bg-white" />}
+              </button>
+            </div>
+
+            {activeDetailTab === 'profile' ? (
+              <>
+                <div className="flex items-center gap-5">
               <div className="w-20 h-20 rounded-3xl bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center text-xl font-black text-zinc-500 border border-zinc-200 dark:border-zinc-800 overflow-hidden relative">
                 {detailedUser.profile_photo ? (
                   <img src={detailedUser.profile_photo} alt="Profile" className="w-full h-full object-cover" />
@@ -801,6 +831,46 @@ export default function UsersPage() {
                  ))}
               </div>
             </div>
+          </>
+        ) : (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
+                {loadingAudit ? (
+                   <div className="flex flex-col items-center justify-center py-20 gap-4">
+                      <LoadingSpinner />
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Scanning Audit Records</p>
+                   </div>
+                ) : auditLogs.length === 0 ? (
+                   <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                      <Activity className="w-12 h-12 mb-4" />
+                      <p className="text-[10px] font-black uppercase tracking-widest">No audit history found</p>
+                   </div>
+                ) : (
+                   <div className="space-y-4">
+                      {auditLogs.map((log) => (
+                         <div key={log.id} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-2">
+                            <div className="flex items-center justify-between">
+                               <Badge variant="zinc" className="h-5 px-2 text-[8px] font-black uppercase bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 border-none">
+                                  {log.action.replace(/_/g, ' ')}
+                               </Badge>
+                               <span className="text-[9px] font-bold text-zinc-400 tabular-nums">{new Date(log.created_at).toLocaleString()}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                               <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
+                               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Authorized by: <span className="text-zinc-900 dark:text-zinc-100">{log.admin_email || 'SYSTEM'}</span></p>
+                            </div>
+                            {log.metadata && Object.keys(log.metadata).length > 0 && (
+                               <div className="mt-2 p-2 bg-white dark:bg-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-700">
+                                  <pre className="text-[8px] font-mono text-zinc-400 overflow-x-auto">
+                                     {JSON.stringify(log.metadata, null, 2)}
+                                  </pre>
+                               </div>
+                            )}
+                         </div>
+                      ))}
+                   </div>
+                )}
+              </div>
+            )}
           </div>
         ) : null}
       </Drawer>

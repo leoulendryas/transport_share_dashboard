@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MessageSquare, User, Clock, Reply, CheckCircle2 } from 'lucide-react';
 import { supportApi } from '@/lib/api/support';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
@@ -15,6 +16,7 @@ import { extractError } from '@/lib/api/errors';
 
 export default function SupportPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [selectedMessage, setSelectedMessage] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -34,8 +36,9 @@ export default function SupportPage() {
       setReplyText('');
       setSelectedMessage(null);
       mutate();
+      addNotification('success', 'Resolution Sent', 'Administrative response transmitted to customer.');
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Transmission Failure', extractError(err));
     } finally {
       setIsSending(false);
     }

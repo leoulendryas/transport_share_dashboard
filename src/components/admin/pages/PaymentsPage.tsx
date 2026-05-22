@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { paymentsApi, GetPaymentsParams } from '@/lib/api/payments';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +31,7 @@ const ITEMS_PER_PAGE = 10;
 
 export default function PaymentsPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'all'>('all');
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
@@ -58,8 +60,9 @@ export default function PaymentsPage() {
       await paymentsApi.releaseManual(paymentId);
       mutate();
       setSelectedPayment(null);
+      addNotification('success', 'Funds Released', 'Capital transfer sequence initiated successfully.');
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Release Failed', extractError(err));
     } finally {
       setIsActionLoading(false);
     }

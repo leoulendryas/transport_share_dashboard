@@ -5,6 +5,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { contentApi } from '@/lib/api/content';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { Review } from '@/types/admin';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
@@ -15,6 +16,7 @@ import { extractError } from '@/lib/api/errors';
 
 export default function ReviewsPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [minRating, setMinRating] = useState<number | undefined>(undefined);
 
   const { data: reviews = [], mutate, isLoading } = useSWR(
@@ -27,8 +29,9 @@ export default function ReviewsPage() {
     try {
       await contentApi.deleteReview(id);
       mutate();
+      addNotification('success', 'Review Deleted', 'The evaluation has been permanently removed.');
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Action Failed', extractError(err));
     }
   };
 

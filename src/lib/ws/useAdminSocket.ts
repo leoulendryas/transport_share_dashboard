@@ -41,8 +41,7 @@ export function useAdminSocket(onEvent: (event: AdminWsEvent) => void) {
       // Reconnect after 3s unless the component unmounted
       setTimeout(() => {
         if (wsRef.current?.readyState === WebSocket.CLOSED) {
-          // Note: This check might be slightly flawed if the component unmounted during the timeout
-          // but for a hook it's generally acceptable or can be managed with a 'mounted' ref.
+          wsRef.current = new WebSocket(`${WS_BASE}?token=${tokenStore.access}`);
         }
       }, 3000);
     };

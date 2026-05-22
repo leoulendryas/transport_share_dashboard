@@ -78,7 +78,9 @@ api.interceptors.response.use(
       if (!refreshPromise) {
         refreshPromise = (async () => {
           try {
-            const { data } = await axios.post(`${API_BASE}/refresh`, {
+            // The refresh endpoint is in /auth, not /admin
+            const authBase = API_BASE.replace(/\/admin\/?$/, '/auth');
+            const { data } = await axios.post(`${authBase}/refresh`, {
               refresh_token: tokenStore.refresh,
             });
             tokenStore.set(data);

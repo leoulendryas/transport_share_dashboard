@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { moderationApi } from '@/lib/api/moderation';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Drawer } from '@/components/ui/Drawer';
@@ -28,6 +29,7 @@ import { extractError } from '@/lib/api/errors';
 
 export default function ReportsPage() {
   const { admin } = useAuth();
+  const { addNotification } = useNotifications();
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'resolved' | 'dismissed'>('all');
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
@@ -53,8 +55,9 @@ export default function ReportsPage() {
       await moderationApi.resolveReport(id, { status, notes });
       setSelectedReport(null);
       mutate();
+      addNotification('success', 'Incident Resolved', `Protocol breach report has been marked as ${status}.`);
     } catch (err) {
-      alert(extractError(err));
+      addNotification('warning', 'Action Failed', extractError(err));
     } finally {
       setIsActionLoading(false);
     }
