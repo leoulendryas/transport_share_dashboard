@@ -24,77 +24,77 @@ export interface GetRidesParams {
 
 export const ridesApi = {
   async list(params: GetRidesParams = {}): Promise<PaginatedResponse<Ride>> {
-    const { data } = await api.get('/rides', { params });
+    const { data } = await api.get('rides', { params });
     return data;
   },
 
   async getLive(): Promise<Ride[]> {
-    const { data } = await api.get('/rides/live');
+    const { data } = await api.get('rides/live');
     return data;
   },
 
   async getIntelligence(risk_level = 'high'): Promise<IntelligenceRide[]> {
-    const { data } = await api.get('/rides/intelligence', { params: { risk_level } });
+    const { data } = await api.get('rides/intelligence', { params: { risk_level } });
     return data;
   },
 
   async get(rideId: number): Promise<RideDetail> {
-    const { data } = await api.get(`/rides/${rideId}`);
+    const { data } = await api.get(`rides/${rideId}`);
     return data;
   },
 
   async getHistory(rideId: number): Promise<RideStatusHistoryEntry[]> {
-    const { data } = await api.get(`/rides/${rideId}/history`);
+    const { data } = await api.get(`rides/${rideId}/history`);
     return data;
   },
 
   async getParticipants(rideId: number): Promise<RideParticipant[]> {
-    const { data } = await api.get(`/rides/${rideId}/participants`);
+    const { data } = await api.get(`rides/${rideId}/participants`);
     return data;
   },
 
   async getVerifications(rideId: number): Promise<RideVerification[]> {
-    const { data } = await api.get(`/rides/${rideId}/verifications`);
+    const { data } = await api.get(`rides/${rideId}/verifications`);
     return data;
   },
 
   async getMessages(rideId: number): Promise<Message[]> {
-    const { data } = await api.get(`/rides/${rideId}/messages`);
+    const { data } = await api.get(`rides/${rideId}/messages`);
     return data;
   },
 
   async start(rideId: number, notes?: string): Promise<{ message: string; status: 'ongoing' }> {
-    const { data } = await api.post(`/rides/${rideId}/start`, { notes });
+    const { data } = await api.post(`rides/${rideId}/start`, { notes });
     return data;
   },
 
   async complete(rideId: number, notes?: string, resolve_verifications = true): Promise<{ message: string; status: 'completed' }> {
-    const { data } = await api.post(`/rides/${rideId}/complete`, { notes, resolve_verifications });
+    const { data } = await api.post(`rides/${rideId}/complete`, { notes, resolve_verifications });
     return data;
   },
 
   async finalize(rideId: number, notes?: string): Promise<{ message: string }> {
-    const { data } = await api.post(`/rides/${rideId}/finalize`, { notes });
+    const { data } = await api.post(`rides/${rideId}/finalize`, { notes });
     return data;
   },
 
   async resolveDispute(rideId: number, resolution: 'complete' | 'refund', notes: string): Promise<{ message: string; resolution: string }> {
-    const { data } = await api.post(`/rides/${rideId}/resolve-dispute`, { resolution, notes });
+    const { data } = await api.post(`rides/${rideId}/resolve-dispute`, { resolution, notes });
     return data;
   },
 
   async updateStatus(rideId: number, status: RideStatus, notes?: string): Promise<{ message: string; from: RideStatus; to: RideStatus }> {
-    const { data } = await api.post(`/rides/${rideId}/status`, { status, notes });
+    const { data } = await api.post(`rides/${rideId}/status`, { status, notes });
     return data;
   },
 
   async cancel(rideId: number): Promise<{ message: string }> {
-    const { data } = await api.post(`/rides/${rideId}/cancel`);
+    const { data } = await api.post(`rides/${rideId}/cancel`);
     return data;
   },
 
   async toggleChat(rideId: number, lock: boolean): Promise<{ message: string }> {
-    const { data } = await api.post(`/rides/${rideId}/toggle-chat`, { lock });
+    const { data } = await api.post(`rides/${rideId}/toggle-chat`, { lock });
     return data;
   },
 
@@ -106,7 +106,7 @@ export const ridesApi = {
     to_address?:     string;
     admin_notes?:    string;
   }): Promise<{ message: string }> {
-    const { data } = await api.put(`/rides/${rideId}/details`, payload);
+    const { data } = await api.put(`rides/${rideId}/details`, payload);
     return data;
   },
 
@@ -116,7 +116,7 @@ export const ridesApi = {
     status?:       string;
     notes?:        string;
   }): Promise<{ message: string }> {
-    const { data } = await api.post(`/rides/${rideId}/participants/add`, payload);
+    const { data } = await api.post(`rides/${rideId}/participants/add`, payload);
     return data;
   },
 
@@ -124,7 +124,7 @@ export const ridesApi = {
     refund?: boolean;
     reason?: string;
   }): Promise<{ message: string; refund_processed: boolean }> {
-    const { data } = await api.post(`/rides/${rideId}/participants/${userId}/remove`, payload);
+    const { data } = await api.post(`rides/${rideId}/participants/${userId}/remove`, payload);
     return data;
   },
 
@@ -132,7 +132,7 @@ export const ridesApi = {
     notes?:         string;
     apply_penalty?: boolean;
   }): Promise<{ message: string; penalty_applied: boolean }> {
-    const { data } = await api.post(`/rides/${rideId}/participants/${userId}/no-show`, payload);
+    const { data } = await api.post(`rides/${rideId}/participants/${userId}/no-show`, payload);
     return data;
   }
 };

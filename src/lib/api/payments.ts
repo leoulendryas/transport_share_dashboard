@@ -13,7 +13,7 @@ export interface GetPaymentsParams {
 
 export const paymentsApi = {
   async list(params: GetPaymentsParams = {}): Promise<PaginatedResponse<Payment>> {
-    const { data } = await api.get('/payments', { params });
+    const { data } = await api.get('payments', { params });
     return data;
   },
 
@@ -21,22 +21,22 @@ export const paymentsApi = {
     status?:             PaymentStatus;
     released_to_driver?: boolean;
   }): Promise<{ message: string }> {
-    const { data } = await api.post(`/payments/${id}/update-status`, payload);
+    const { data } = await api.post(`payments/${id}/update-status`, payload);
     return data;
   },
 
   async refund(paymentId: number, amount_percent = 1.0, reason?: string): Promise<{ message: string }> {
-    const { data } = await api.post(`/payments/${paymentId}/refund`, { amount_percent, reason });
+    const { data } = await api.post(`payments/${paymentId}/refund`, { amount_percent, reason });
     return data;
   },
 
   async verifyManual(tx_ref: string): Promise<{ message: string; already_synced?: boolean; data: unknown }> {
-    const { data } = await api.post(`/payments/${tx_ref}/verify-manual`);
+    const { data } = await api.post(`payments/${tx_ref}/verify-manual`);
     return data;
   },
 
   async releaseManual(paymentId: number): Promise<{ message: string; payment: Payment }> {
-    const { data } = await api.post(`/payments/${paymentId}/release-manual`);
+    const { data } = await api.post(`payments/${paymentId}/release-manual`);
     return data;
   }
 };

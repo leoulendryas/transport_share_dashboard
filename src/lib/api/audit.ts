@@ -14,7 +14,7 @@ export interface GetAuditLogsParams {
 
 export const auditApi = {
   async list(params: GetAuditLogsParams = {}): Promise<PaginatedResponse<AuditLog>> {
-    const { data } = await api.get('/admin-logs', { params });
+    const { data } = await api.get('admin-logs', { params });
     return data;
   }
 };

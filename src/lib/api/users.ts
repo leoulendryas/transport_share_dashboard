@@ -16,27 +16,27 @@ export interface GetUsersParams {
 
 export const usersApi = {
   async list(params: GetUsersParams = {}): Promise<PaginatedResponse<AdminUser>> {
-    const { data } = await api.get('/users', { params });
+    const { data } = await api.get('users', { params });
     return data;
   },
 
   async get(userId: number): Promise<UserDetail> {
-    const { data } = await api.get(`/users/${userId}`);
+    const { data } = await api.get(`users/${userId}`);
     return data;
   },
 
   async getAuditLogs(userId: number): Promise<AuditLog[]> {
-    const { data } = await api.get(`/users/${userId}/audit-logs`);
+    const { data } = await api.get(`users/${userId}/audit-logs`);
     return data;
   },
 
   async ban(userId: number): Promise<{ message: string }> {
-    const { data } = await api.post(`/users/${userId}/ban`);
+    const { data } = await api.post(`users/${userId}/ban`);
     return data;
   },
 
   async unban(userId: number): Promise<{ message: string }> {
-    const { data } = await api.post(`/users/${userId}/unban`);
+    const { data } = await api.post(`users/${userId}/unban`);
     return data;
   },
 
@@ -44,22 +44,22 @@ export const usersApi = {
     message: string;
     suspended_until: string;
   }> {
-    const { data } = await api.post(`/users/${userId}/suspend`, { days, reason });
+    const { data } = await api.post(`users/${userId}/suspend`, { days, reason });
     return data;
   },
 
   async unsuspend(userId: number): Promise<{ message: string }> {
-    const { data } = await api.post(`/users/${userId}/unsuspend`);
+    const { data } = await api.post(`users/${userId}/unsuspend`);
     return data;
   },
 
   async toggleAdmin(userId: number, is_admin: boolean): Promise<{ message: string }> {
-    const { data } = await api.post(`/users/${userId}/toggle-admin`, { is_admin });
+    const { data } = await api.post(`users/${userId}/toggle-admin`, { is_admin });
     return data;
   },
 
   async updateMemberLevel(userId: number, member_level: MemberLevel): Promise<{ message: string }> {
-    const { data } = await api.post(`/users/${userId}/member-level`, { member_level });
+    const { data } = await api.post(`users/${userId}/member-level`, { member_level });
     return data;
   }
 };
