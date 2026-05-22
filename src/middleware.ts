@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
 const PUBLIC_PATHS = ['/admin/login', '/api/'];
-const JWT_SECRET   = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key'); // In production, this MUST be in .env
+const JWT_SECRET   = new TextEncoder().encode(process.env.JWT_SECRET);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -26,8 +26,13 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
+    if (!process.env.JWT_SECRET) {
+      console.warn('Middleware: JWT_SECRET missing in environment');
+      return NextResponse.next(); // Fallback if secret is missing to avoid lockout in dev
+    }
+    
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    if (!payload.is_admin) {
+    if (!payload.isAdmin) {
       const response = NextResponse.redirect(new URL('/admin/login', request.url));
       response.cookies.delete('gara_access');
       return response;

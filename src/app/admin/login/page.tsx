@@ -31,7 +31,8 @@ export default function LoginPage() {
         setTempToken(result.temp_token);
         setOtpMethod(result.method);
       } else {
-        router.push('/admin/dashboard');
+        // Redirect to dashboard on success
+        window.location.href = '/admin/dashboard';
       }
     } catch (err: any) {
       setError(extractError(err));
@@ -48,7 +49,7 @@ export default function LoginPage() {
 
     try {
       await verify2FA({ temp_token: tempToken, otp });
-      router.push('/admin/dashboard');
+      window.location.href = '/admin/dashboard';
     } catch (err: any) {
       setError(extractError(err));
     } finally {
