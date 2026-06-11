@@ -2,7 +2,7 @@
 import { api } from './client';
 import type {
   Ride, RideDetail, RideParticipant, RideStatusHistoryEntry,
-  RideVerification, IntelligenceRide, RideStatus,
+  RideVerification, IntelligenceRide, LiveRide, RideStatus,
   PaginatedResponse, Message
 } from '@/types/admin';
 
@@ -20,6 +20,8 @@ export interface GetRidesParams {
   radius?:        number;
   min_price?:     number;
   max_price?:     number;
+  driver_id?:     number;
+  search?:        string;
 }
 
 export const ridesApi = {
@@ -28,13 +30,13 @@ export const ridesApi = {
     return data;
   },
 
-  async getLive(): Promise<Ride[]> {
+  async getLive(): Promise<LiveRide[]> {
     const { data } = await api.get('rides/live');
     return data;
   },
 
-  async getIntelligence(risk_level = 'high'): Promise<IntelligenceRide[]> {
-    const { data } = await api.get('rides/intelligence', { params: { risk_level } });
+  async getIntelligence(): Promise<IntelligenceRide[]> {
+    const { data } = await api.get('rides/intelligence');
     return data;
   },
 
@@ -88,8 +90,8 @@ export const ridesApi = {
     return data;
   },
 
-  async cancel(rideId: number): Promise<{ message: string }> {
-    const { data } = await api.post(`rides/${rideId}/cancel`);
+  async cancel(rideId: number, notes?: string): Promise<{ message: string }> {
+    const { data } = await api.post(`rides/${rideId}/cancel`, { notes });
     return data;
   },
 

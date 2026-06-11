@@ -15,15 +15,17 @@ export default function DashboardCharts({ stats }: DashboardChartsProps) {
   if (!stats) return null;
 
   const rideData = [
-    { name: 'Active', value: stats.rideStats.activeRides, color: isDark ? '#ffffff' : '#09090b' },
-    { name: 'Completed', value: stats.rideStats.completedRides, color: isDark ? '#a1a1aa' : '#52525b' },
-    { name: 'Cancelled', value: stats.rideStats.cancelledRides, color: isDark ? '#52525b' : '#a1a1aa' },
-    { name: 'Disputed', value: stats.rideStats.disputedRides, color: isDark ? '#27272a' : '#e4e4e7' },
-  ];
+    { name: 'Active', value: stats.rideStats.active, color: isDark ? '#ffffff' : '#09090b' },
+    { name: 'Ongoing', value: stats.rideStats.ongoing, color: isDark ? '#d4d4d8' : '#3f3f46' },
+    { name: 'Completed', value: stats.rideStats.completed, color: isDark ? '#a1a1aa' : '#52525b' },
+    { name: 'Cancelled', value: stats.rideStats.cancelled, color: isDark ? '#52525b' : '#a1a1aa' },
+    { name: 'Disputed', value: stats.rideStats.disputed, color: isDark ? '#27272a' : '#e4e4e7' },
+  ].filter(d => (d.value ?? 0) > 0);
 
   const paymentData = [
-    { name: 'Successful', amount: stats.paymentStats.successfulPayments, fill: isDark ? '#ffffff' : '#09090b' },
-    { name: 'Pending', amount: stats.paymentStats.totalPayments - stats.paymentStats.successfulPayments, fill: isDark ? '#27272a' : '#e4e4e7' },
+    { name: 'Successful', amount: stats.paymentStats.successful, fill: isDark ? '#ffffff' : '#09090b' },
+    { name: 'Pending', amount: Math.max(0, stats.paymentStats.total - stats.paymentStats.successful), fill: isDark ? '#3f3f46' : '#a1a1aa' },
+    { name: 'Refunded', amount: stats.paymentStats.totalRefunded, fill: isDark ? '#27272a' : '#e4e4e7' },
   ];
 
   const chartTheme: any = {

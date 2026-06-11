@@ -4,9 +4,9 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { Payment, PaymentStatus } from '@/types/admin';
-import { 
-  Check, 
-  Download, 
+import {
+  Check,
+  Download,
   ExternalLink,
   RefreshCw,
   Navigation,
@@ -15,8 +15,12 @@ import {
   ShieldCheck,
   Zap,
   DollarSign,
-  Hash
+  Hash,
+  RotateCcw,
+  Search,
+  User as UserIcon
 } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { paymentsApi, GetPaymentsParams } from '@/lib/api/payments';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/context/NotificationContext';
@@ -36,6 +40,9 @@ export default function PaymentsPage() {
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'all'>('all');
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [refundModal, setRefundModal] = useState<{ open: boolean; paymentId: number | null }>({ open: false, paymentId: null });
+  const [refundPercent, setRefundPercent] = useState('100');
+  const [refundReason, setRefundReason] = useState('');
 
   const params: GetPaymentsParams = {
     page: currentPage,
@@ -68,6 +75,50 @@ export default function PaymentsPage() {
     }
   };
   
+  const handleVerifyManual = async (txRef: string | null) => {
+    if (!admin || !txRef) {
+      addNotification('warning', 'No Reference', 'This payment has no transaction reference to verify.');
+      return;
+    }
+    setIsActionLoading(true);
+    try {
+      const res = await paymentsApi.verifyManual(txRef);
+      mutate();
+      addNotification('success', 'Verification Synced', res.message || 'Payment re-synced with Chapa.');
+    } catch (err) {
+      addNotification('warning', 'Verification Failed', extractError(err));
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const submitRefund = async () => {
+    if (!admin || !refundModal.paymentId) return;
+    const pct = Number(refundPercent) / 100;
+    if (!pct || pct <= 0 || pct > 1) {
+      addNotification('warning', 'Invalid Amount', 'Refund percent must be between 1 and 100.');
+      return;
+    }
+    if (!refundReason.trim()) {
+      addNotification('warning', 'Reason Required', 'Provide a reason for the refund.');
+      return;
+    }
+    setIsActionLoading(true);
+    try {
+      await paymentsApi.refund(refundModal.paymentId, pct, refundReason.trim());
+      setRefundModal({ open: false, paymentId: null });
+      setRefundReason('');
+      setRefundPercent('100');
+      mutate();
+      setSelectedPayment(null);
+      addNotification('success', 'Refund Processed', `Refunded ${refundPercent}% successfully.`);
+    } catch (err) {
+      addNotification('warning', 'Refund Failed', extractError(err));
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
   const totalVolume = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const completedVolume = payments
@@ -249,11 +300,46 @@ export default function PaymentsPage() {
                   </div>
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-3">
+                        <UserIcon className="w-4 h-4 text-zinc-400" />
+                        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Payer</p>
+                     </div>
+                     <p className="text-xs font-bold text-zinc-950 dark:text-white">{selectedPayment.user_name || 'VOID'}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-3">
                         <Mail className="w-4 h-4 text-zinc-400" />
                         <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Node Comms</p>
                      </div>
                      <p className="text-xs font-bold text-zinc-950 dark:text-white">{selectedPayment.user_email || 'VOID'}</p>
                   </div>
+                  {selectedPayment.tx_ref && (
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-3">
+                          <Hash className="w-4 h-4 text-zinc-400" />
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">TX Ref</p>
+                       </div>
+                       <p className="text-[10px] font-mono font-bold text-zinc-950 dark:text-white truncate max-w-[180px]">{selectedPayment.tx_ref}</p>
+                    </div>
+                  )}
+               </div>
+
+               <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="secondary"
+                    disabled={isActionLoading || !selectedPayment.tx_ref}
+                    onClick={() => handleVerifyManual(selectedPayment.tx_ref)}
+                    className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
+                  >
+                    <Search className="w-3.5 h-3.5" /> Verify w/ Chapa
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={isActionLoading || selectedPayment.status === 'refunded' || selectedPayment.status === 'failed'}
+                    onClick={() => { setRefundPercent('100'); setRefundReason(''); setRefundModal({ open: true, paymentId: selectedPayment.id }); }}
+                    className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Issue Refund
+                  </Button>
                </div>
 
                {selectedPayment.from_address && (
@@ -298,6 +384,41 @@ export default function PaymentsPage() {
           </div>
         )}
       </Drawer>
+
+      <Modal
+        isOpen={refundModal.open}
+        onClose={() => setRefundModal({ open: false, paymentId: null })}
+        title="Issue Refund"
+      >
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Refund Percent (1–100)</label>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={refundPercent}
+              onChange={(e) => setRefundPercent(e.target.value)}
+              className="w-full bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Reason</label>
+            <textarea
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="e.g. Driver cancelled after payment."
+              className="w-full h-28 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all resize-none"
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={() => setRefundModal({ open: false, paymentId: null })} className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest">Abort</Button>
+            <Button variant="destructive" onClick={submitRefund} disabled={isActionLoading || !refundReason.trim()} className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest">
+              {isActionLoading ? <LoadingSpinner /> : 'Confirm Refund'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -11,8 +11,13 @@ export interface GetMessagesParams {
 }
 
 export const contentApi = {
-  async listReviews(page = 1, limit = 10, min_rating?: number): Promise<Review[]> {
-    const { data } = await api.get('reviews', { params: { page, limit, min_rating } });
+  async listReviews(
+    page = 1,
+    limit = 10,
+    min_rating?: number,
+    max_rating?: number,
+  ): Promise<PaginatedResponse<Review>> {
+    const { data } = await api.get('reviews', { params: { page, limit, min_rating, max_rating } });
     return data;
   },
 

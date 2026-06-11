@@ -75,19 +75,21 @@ export interface AdminUser {
 }
 
 export interface UserDetail extends AdminUser {
-  vehicles:       Vehicle[];
-  recentReviews:  Review[];
-  recentRides:    Ride[];
-  intelligence_audit: {
-    potential_conflicts:         ScheduleConflict[];
-    has_suspicious_cancellations: boolean;
+  vehicles:        Vehicle[];
+  recentReviews:   Review[];
+  recentRides:     Ride[];
+  recentReports?:  Report[];
+  recentPayments?: Payment[];
+  audit: {
+    scheduling_conflicts:     ScheduleConflict[];
+    has_scheduling_conflicts: boolean;
   };
 }
 
 export interface ScheduleConflict {
-  ride_1:           number;
-  ride_2:           number;
-  departure_time:   string;
+  ride_1:            number;
+  ride_2:            number;
+  departure_time:    string;
   estimated_arrival: string;
 }
 
@@ -162,7 +164,7 @@ export interface Ride {
     driver_has_overlaps:   boolean;
     driver_overlap_details: OverlapDetail[];
   };
-  intelligence_audit?: {
+  intelligence_flags?: {
     high_cancellation_rate: boolean;
     unusual_pricing:        boolean;
   };
@@ -193,7 +195,7 @@ export interface RideDetail extends Ride {
     driver_has_overlaps:   boolean;
     driver_overlap_details: OverlapDetail[];
   };
-  intelligence_audit: {
+  intelligence_flags: {
     high_cancellation_rate: boolean;
     unusual_pricing:        boolean;
   };
@@ -267,9 +269,14 @@ export interface RideVerification {
 export interface IntelligenceRide extends Ride {
   driver_cancellations: number;
   driver_penalty:       number;
-  passenger_count:      number;
   report_count:         number;
   sos_count:            number;
+}
+
+export interface LiveRide extends Ride {
+  driver_name:     string;
+  driver_phone:    string;
+  paid_passengers: number;
 }
 
 // ─── Payments ────────────────────────────────────────────────────────────────
@@ -283,12 +290,14 @@ export interface Payment {
   amount:              number;
   status:              PaymentStatus;
   reference:           string;
+  tx_ref:              string | null;
   released_to_driver:  boolean;
   released_at:         string | null;
   refunded_at:         string | null;
   refund_reason:       string | null;
   created_at:          string;
   user_email:          string | null;
+  user_name:           string | null;
   from_address:        string | null;
   to_address:          string | null;
 }
@@ -395,6 +404,7 @@ export interface Company {
 
 export interface CompanyStat extends Company {
   total_rides:      number;
+  completed_rides:  number;
   total_passengers: number;
   total_revenue:    number;
 }
@@ -408,39 +418,76 @@ export interface DashboardStats {
     ids:      number;
     licenses: number;
     vehicles: number;
+    total:    number;
   };
-  pendingReports: number;
-  activeSOS:      number;
-  growth: { last24h: number; prev24h: number };
+  pendingReports:     number;
+  activeSOS:          number;
+  disputes:           number;
+  pendingCompletions: number;
+  growth: {
+    last24h:  number;
+    prev24h:  number;
+    last7d:   number;
+    trend24h: number;
+  };
   rideStats: {
-    totalRides:      number;
-    activeRides:     number;
-    completedRides:  number;
-    cancelledRides:  number;
-    disputedRides:   number;
-    averageSeats:    number;
+    total:             number;
+    active:            number;
+    ongoing:           number;
+    completed:         number;
+    cancelled:         number;
+    disputed:          number;
+    pendingCompletion: number;
+    avgSeats:          number;
   };
   paymentStats: {
-    totalPayments:      number;
-    successfulPayments: number;
-    totalRevenue:       number;
-    pendingPayouts:     number;
+    total:         number;
+    successful:    number;
+    totalRevenue:  number;
+    totalRefunded: number;
+    pendingPayouts: number;
   };
 }
 
 export interface GrowthStats {
   users_this_week:  number;
   users_last_week:  number;
+  users_this_month: number;
   rev_this_week:    number;
   rev_last_week:    number;
+  rev_this_month:   number;
   user_growth_pct:  number;
   rev_growth_pct:   number;
+}
+
+// ─── Support ─────────────────────────────────────────────────────────────────
+
+export interface SupportTicket {
+  id:          number;
+  user_id:     number;
+  subject:     string | null;
+  message:     string;
+  status:      string;
+  reply:       string | null;
+  replied_at:  string | null;
+  created_at:  string;
+  email:       string | null;
+  first_name:  string | null;
+  last_name:   string | null;
+  user?: {
+    id:            number;
+    first_name:    string;
+    last_name:     string;
+    email:         string | null;
+    profile_photo: string | null;
+  };
 }
 
 // ─── System ──────────────────────────────────────────────────────────────────
 
 export type SystemSettings = Record<string, string>;
 
+// Per-user audit row from GET /api/admin/users/:userId/audit-logs
 export interface AuditLog {
   id:          number;
   user_id:     number;

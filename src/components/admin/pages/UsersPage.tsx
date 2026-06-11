@@ -93,17 +93,24 @@ export default function UsersPage() {
   const { addNotification } = useNotifications();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBanned, setFilterBanned] = useState<'all' | 'banned' | 'active'>('all');
+  const [filterVerification, setFilterVerification] = useState<'all' | 'pending_id' | 'pending_license' | 'verified' | 'unverified'>('all');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<'profile' | 'audit'>('profile');
   const [isUpdating, setIsUpdating] = useState(false);
   const [rejectionModal, setRejectionModal] = useState<{ open: boolean, type: 'id' | 'license' | 'vehicle', id: number | null }>({ open: false, type: 'id', id: null });
   const [rejectionReason, setRejectionReason] = useState('');
+  const [suspendModal, setSuspendModal] = useState<{ open: boolean, userId: number | null }>({ open: false, userId: null });
+  const [suspendDays, setSuspendDays] = useState('7');
+  const [suspendReason, setSuspendReason] = useState('');
+  const [banModal, setBanModal] = useState<{ open: boolean, userId: number | null }>({ open: false, userId: null });
+  const [banReason, setBanReason] = useState('');
 
   const { data: usersData, mutate: mutateUsers, isLoading: loading } = useSWR(
-    admin ? ['users', searchTerm, filterBanned] : null,
+    admin ? ['users', searchTerm, filterBanned, filterVerification] : null,
     () => usersApi.list({
       search: searchTerm || undefined,
       banned: filterBanned === 'all' ? undefined : filterBanned === 'banned',
+      verification_status: filterVerification === 'all' ? undefined : filterVerification,
       limit: 100
     })
   );
@@ -144,19 +151,60 @@ export default function UsersPage() {
 
   const handleToggleBan = async (user: User) => {
     if (!admin) return;
+    if (!user.banned) {
+      // Opening ban requires a reason — route through the ban modal.
+      setBanReason('');
+      setBanModal({ open: true, userId: user.id });
+      return;
+    }
     setIsUpdating(true);
     try {
-      if (user.banned) {
-        await usersApi.unban(user.id);
-        addNotification('success', 'Node Restored', `${user.first_name}'s access has been reactivated.`);
-      } else {
-        await usersApi.ban(user.id);
-        addNotification('success', 'Node Suspended', `${user.first_name}'s access has been terminated.`);
-      }
+      await usersApi.unban(user.id);
+      addNotification('success', 'Node Restored', `${user.first_name}'s access has been reactivated.`);
       mutateUsers();
       if (selectedUserId === user.id) mutateDetails();
     } catch (error) {
       addNotification('warning', 'State Update Failed', extractError(error));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const submitBan = async () => {
+    if (!admin || !banModal.userId) return;
+    setIsUpdating(true);
+    try {
+      await usersApi.ban(banModal.userId, banReason.trim() || undefined);
+      addNotification('success', 'Node Terminated', 'User access has been terminated.');
+      setBanModal({ open: false, userId: null });
+      setBanReason('');
+      mutateUsers();
+      if (selectedUserId === banModal.userId) mutateDetails();
+    } catch (error) {
+      addNotification('warning', 'Action Failed', extractError(error));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const submitSuspend = async () => {
+    if (!admin || !suspendModal.userId) return;
+    const days = Number(suspendDays);
+    if (!days || days <= 0) {
+      addNotification('warning', 'Invalid Input', 'Suspension length must be greater than 0 days.');
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      await usersApi.suspend(suspendModal.userId, days, suspendReason.trim() || undefined);
+      addNotification('success', 'Node Suspended', `User suspended for ${days} day(s).`);
+      setSuspendModal({ open: false, userId: null });
+      setSuspendReason('');
+      setSuspendDays('7');
+      mutateUsers();
+      if (selectedUserId === suspendModal.userId) mutateDetails();
+    } catch (error) {
+      addNotification('warning', 'Action Failed', extractError(error));
     } finally {
       setIsUpdating(false);
     }
@@ -370,7 +418,18 @@ export default function UsersPage() {
           >
             <option value="all">All Accounts</option>
             <option value="active">Active Only</option>
-            <option value="banned">Suspended Only</option>
+            <option value="banned">Banned Only</option>
+          </select>
+          <select
+            value={filterVerification}
+            onChange={(e) => setFilterVerification(e.target.value as any)}
+            className="px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all cursor-pointer dark:text-zinc-200"
+          >
+            <option value="all">All Trust</option>
+            <option value="verified">Verified</option>
+            <option value="unverified">Unverified</option>
+            <option value="pending_id">Pending ID</option>
+            <option value="pending_license">Pending License</option>
           </select>
           <Button variant="secondary" size="md" onClick={() => mutateUsers()} className="rounded-xl">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -481,31 +540,42 @@ export default function UsersPage() {
                 {detailedUser.is_admin ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
                 {detailedUser.is_admin ? 'Revoke Admin' : 'Grant Admin'}
               </Button>
+              {!detailedUser.banned && !isCurrentlySuspended(detailedUser) && (
+                <Button
+                  variant="secondary"
+                  onClick={() => { setSuspendReason(''); setSuspendDays('7'); setSuspendModal({ open: true, userId: detailedUser.id }); }}
+                  disabled={isUpdating}
+                  className="w-full h-12 gap-2 text-[10px] font-black uppercase tracking-widest"
+                >
+                  <Clock className="w-4 h-4" />
+                  Suspend Temporarily
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 onClick={() => handleToggleBan(detailedUser)}
                 disabled={isUpdating}
-                className="w-full h-12 gap-2 text-[10px] font-black uppercase tracking-widest"
+                className={`w-full h-12 gap-2 text-[10px] font-black uppercase tracking-widest ${detailedUser.banned || isCurrentlySuspended(detailedUser) ? 'col-span-1' : 'col-span-2'}`}
               >
                 <Ban className="w-4 h-4" />
-                {detailedUser.banned ? 'Restore Access' : 'Suspend Node'}
+                {detailedUser.banned ? 'Restore Access' : 'Ban Permanently'}
               </Button>
             </div>
 
-            {detailedUser.intelligence_audit && (
+            {detailedUser.audit && (detailedUser.audit.has_scheduling_conflicts || (detailedUser.cancellation_count ?? 0) > 5) && (
               <div className="space-y-3">
                 <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Intelligence Audit</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {detailedUser.intelligence_audit.has_suspicious_cancellations && (
+                  {(detailedUser.cancellation_count ?? 0) > 5 && (
                     <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl flex items-center gap-3">
                       <AlertCircle className="w-5 h-5 text-amber-500" />
-                      <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">High cancellation rate detected (&gt;5)</p>
+                      <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">High cancellation rate detected ({detailedUser.cancellation_count})</p>
                     </div>
                   )}
-                  {detailedUser.intelligence_audit.potential_conflicts.length > 0 && (
+                  {detailedUser.audit.has_scheduling_conflicts && (
                     <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl flex items-center gap-3">
                       <ShieldAlert className="w-5 h-5 text-rose-500" />
-                      <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Suspicious overlapping bookings detected ({detailedUser.intelligence_audit.potential_conflicts.length})</p>
+                      <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Scheduling conflicts detected ({detailedUser.audit.scheduling_conflicts?.length || 0})</p>
                     </div>
                   )}
                 </div>
@@ -831,6 +901,45 @@ export default function UsersPage() {
                  ))}
               </div>
             </div>
+
+            {detailedUser.recentReports && detailedUser.recentReports.length > 0 && (
+              <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <AlertCircle className="w-3.5 h-3.5" /> Filed Against Node ({detailedUser.recentReports.length})
+                </h4>
+                <div className="space-y-3">
+                  {detailedUser.recentReports.map(report => (
+                    <div key={report.id} className="p-4 bg-rose-50/40 dark:bg-rose-950/10 rounded-2xl border border-rose-100 dark:border-rose-900/30">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] font-black text-zinc-900 dark:text-zinc-100 uppercase">By {report.reporter_name || 'Anonymous'}</p>
+                        <Badge variant={report.status === 'resolved' ? 'success' : report.status === 'dismissed' ? 'zinc' : 'warning'}>{report.status}</Badge>
+                      </div>
+                      <p className="text-[10px] font-medium text-zinc-500 leading-relaxed italic">"{report.description}"</p>
+                      <p className="text-[8px] text-zinc-400 font-bold mt-2 uppercase tabular-nums">{new Date(report.created_at).toLocaleDateString()}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {detailedUser.recentPayments && detailedUser.recentPayments.length > 0 && (
+              <div className="space-y-4 pt-6 border-t border-zinc-100 dark:border-zinc-900">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <DollarSign className="w-3.5 h-3.5" /> Payment Ledger ({detailedUser.recentPayments.length})
+                </h4>
+                <div className="space-y-3 pb-10">
+                  {detailedUser.recentPayments.map(payment => (
+                    <div key={payment.id} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black text-zinc-950 dark:text-white uppercase tabular-nums">{payment.amount} ETB</p>
+                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">RIDE_{payment.ride_id} • {new Date(payment.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <Badge variant={payment.status === 'success' ? 'success' : payment.status === 'refunded' ? 'warning' : payment.status === 'failed' ? 'error' : 'zinc'}>{payment.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         ) : (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
@@ -921,6 +1030,69 @@ export default function UsersPage() {
               className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-200 dark:shadow-none"
             >
               {isUpdating ? <LoadingSpinner /> : 'Confirm Termination'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={suspendModal.open}
+        onClose={() => setSuspendModal({ open: false, userId: null })}
+        title="Temporary Suspension"
+      >
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Duration (Days)</label>
+            <input
+              type="number"
+              min={1}
+              value={suspendDays}
+              onChange={(e) => setSuspendDays(e.target.value)}
+              className="w-full bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Reason (optional)</label>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              placeholder="e.g. Repeated late cancellations."
+              className="w-full h-28 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all resize-none"
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={() => setSuspendModal({ open: false, userId: null })} className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest">Abort</Button>
+            <Button onClick={submitSuspend} disabled={isUpdating} className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest">
+              {isUpdating ? <LoadingSpinner /> : 'Confirm Suspension'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={banModal.open}
+        onClose={() => setBanModal({ open: false, userId: null })}
+        title="Permanent Ban"
+      >
+        <div className="space-y-6">
+          <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-2xl border border-red-100 dark:border-red-900/30">
+            <p className="text-xs text-red-700 dark:text-red-300 font-medium leading-relaxed">
+              Banning revokes all access permanently. Provide a reason for the audit trail.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Reason</label>
+            <textarea
+              value={banReason}
+              onChange={(e) => setBanReason(e.target.value)}
+              placeholder="e.g. Fraudulent activity confirmed."
+              className="w-full h-28 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white transition-all resize-none"
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button variant="ghost" onClick={() => setBanModal({ open: false, userId: null })} className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest">Abort</Button>
+            <Button variant="destructive" onClick={submitBan} disabled={isUpdating} className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest">
+              {isUpdating ? <LoadingSpinner /> : 'Confirm Ban'}
             </Button>
           </div>
         </div>

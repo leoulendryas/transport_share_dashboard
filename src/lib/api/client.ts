@@ -13,15 +13,22 @@ export const tokenStore = {
   get access()  { return accessToken; },
   get refresh() { return refreshToken; },
 
-  set(tokens: { access_token: string; refresh_token: string }) {
-    accessToken  = tokens.access_token;
-    refreshToken = tokens.refresh_token;
+  // The backend is inconsistent about token casing: login/verify-2fa/refresh use
+  // snake_case (access_token), while google-signin returns camelCase (accessToken).
+  // Accept both. See API_CONTRACT §"Token field-name inconsistency".
+  set(tokens: { access_token?: string; refresh_token?: string; accessToken?: string; refreshToken?: string }) {
+    const access  = tokens.access_token  ?? tokens.accessToken;
+    const refresh = tokens.refresh_token ?? tokens.refreshToken;
+    if (!access || !refresh) return;
+
+    accessToken  = access;
+    refreshToken = refresh;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('gara_access',  tokens.access_token);
-      localStorage.setItem('gara_refresh', tokens.refresh_token);
-      
+      localStorage.setItem('gara_access',  access);
+      localStorage.setItem('gara_refresh', refresh);
+
       // Mirror access token to cookie for middleware
-      document.cookie = `gara_access=${tokens.access_token}; path=/; SameSite=Strict; Secure`;
+      document.cookie = `gara_access=${access}; path=/; SameSite=Strict; Secure`;
     }
   },
 

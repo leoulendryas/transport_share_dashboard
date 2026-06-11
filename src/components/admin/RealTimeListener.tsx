@@ -10,6 +10,14 @@ export default function RealTimeListener() {
 
   const handleEvent = useCallback((event: AdminWsEvent) => {
     switch (event.type) {
+      case 'ADMIN_SOS_ALERT':
+        addNotification(
+          'warning',
+          '🚨 SOS Alert',
+          `${event.userName || 'A user'} triggered an emergency on ride #${event.rideId}.`
+        );
+        break;
+
       case 'ride_started':
         addNotification(
           'info',

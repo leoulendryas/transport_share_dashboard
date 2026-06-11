@@ -19,10 +19,12 @@ export default function ReviewsPage() {
   const { addNotification } = useNotifications();
   const [minRating, setMinRating] = useState<number | undefined>(undefined);
 
-  const { data: reviews = [], mutate, isLoading } = useSWR(
+  const { data, mutate, isLoading } = useSWR(
     admin ? ['reviews', minRating] : null,
     () => contentApi.listReviews(1, 50, minRating)
   );
+
+  const reviews = data?.results || [];
 
   const handleDelete = async (id: number) => {
     if (!admin || !confirm('Are you sure you want to delete this review? This action is permanent.')) return;

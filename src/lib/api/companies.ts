@@ -13,8 +13,8 @@ export const companiesApi = {
     return data;
   },
 
-  async create(name: string): Promise<Company> {
-    const { data } = await api.post('companies', { name });
+  async create(name: string, is_active = true): Promise<Company> {
+    const { data } = await api.post('companies', { name, is_active });
     return data;
   },
 

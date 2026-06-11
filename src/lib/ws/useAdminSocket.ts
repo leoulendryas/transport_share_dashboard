@@ -6,6 +6,9 @@ import { WS_BASE } from '@/lib/config';
 import { tokenStore } from '@/lib/api/client';
 
 export type AdminWsEvent =
+  | { type: 'connection_established'; userId: number; isAdmin: boolean }
+  | { type: 'ADMIN_SOS_ALERT'; rideId: number; userId: number; userName: string; userEmail: string; location: { latitude: number; longitude: number }; message?: string; timestamp: string }
+  | { type: 'SOS_ALERT';         rideId: number; userId: number; userName: string; location: { latitude: number; longitude: number }; message?: string; timestamp: string }
   | { type: 'ride_started';      ride_id: string; message: string; timestamp: string }
   | { type: 'ride_completed';    ride_id: string; message: string; timestamp: string }
   | { type: 'ride_status_update'; rideId: string; status: string; message: string }
@@ -23,7 +26,7 @@ export function useAdminSocket(onEvent: (event: AdminWsEvent) => void) {
   useEffect(() => {
     if (!tokenStore.access) return;
 
-    const ws = new WebSocket(`${WS_BASE}?token=${tokenStore.access}`);
+    const ws = new WebSocket(`${WS_BASE}/?token=${tokenStore.access}`);
     wsRef.current = ws;
 
     ws.onmessage = (e) => {
@@ -41,7 +44,7 @@ export function useAdminSocket(onEvent: (event: AdminWsEvent) => void) {
       // Reconnect after 3s unless the component unmounted
       setTimeout(() => {
         if (wsRef.current?.readyState === WebSocket.CLOSED) {
-          wsRef.current = new WebSocket(`${WS_BASE}?token=${tokenStore.access}`);
+          wsRef.current = new WebSocket(`${WS_BASE}/?token=${tokenStore.access}`);
         }
       }, 3000);
     };

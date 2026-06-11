@@ -11,7 +11,10 @@ export interface GetUsersParams {
   search?:              string;
   banned?:              boolean;
   is_admin?:            boolean;
-  verification_status?: 'pending_id' | 'pending_license';
+  verification_status?: 'pending_id' | 'pending_license' | 'verified' | 'unverified';
+  gender?:              string;
+  sort_by?:             'created_at' | 'last_login' | 'first_name' | 'email';
+  sort_dir?:            'asc' | 'desc';
 }
 
 export const usersApi = {
@@ -30,8 +33,8 @@ export const usersApi = {
     return data;
   },
 
-  async ban(userId: number): Promise<{ message: string }> {
-    const { data } = await api.post(`users/${userId}/ban`);
+  async ban(userId: number, reason?: string): Promise<{ message: string }> {
+    const { data } = await api.post(`users/${userId}/ban`, { reason });
     return data;
   },
 

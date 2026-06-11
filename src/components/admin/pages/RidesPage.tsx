@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
-import { 
-  Ride, 
-  Company, 
-  RideDetail, 
-  Message, 
+import {
+  Ride,
+  Company,
+  RideDetail,
+  Message,
   RideStatusHistoryEntry,
   RideStatus
 } from '@/types/admin';
+import { Modal } from '@/components/ui/Modal';
 import { 
   Car, 
   MapPin, 
@@ -35,7 +36,14 @@ import {
   History,
   Briefcase,
   Filter,
-  ChevronDown
+  ChevronDown,
+  Scale,
+  Play,
+  UserPlus,
+  UserMinus,
+  Pencil,
+  Radio,
+  Activity
 } from 'lucide-react';
 import { ridesApi, GetRidesParams } from '@/lib/api/rides';
 import { companiesApi } from '@/lib/api/companies';
@@ -61,6 +69,12 @@ export default function RidesPage() {
   const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'chat' | 'history'>('info');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
+  const [viewMode, setViewMode] = useState<'all' | 'live' | 'flagged'>('all');
+  const [disputeModal, setDisputeModal] = useState<{ open: boolean; rideId: number | null }>({ open: false, rideId: null });
+  const [editModal, setEditModal] = useState<{ open: boolean; rideId: number | null }>({ open: false, rideId: null });
+  const [editForm, setEditForm] = useState({ departure_time: '', total_seats: '', price_per_seat: '', from_address: '', to_address: '', admin_notes: '' });
+  const [addUserId, setAddUserId] = useState('');
+
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     status: '' as RideStatus | '',
@@ -71,8 +85,8 @@ export default function RidesPage() {
     max_price: ''
   });
 
-  const { data: ridesData, mutate: mutateRides, isLoading: loading } = useSWR(
-    admin ? ['rides', currentPage, filters] : null,
+  const { data: ridesData, mutate: mutateRides, isLoading: loadingAll } = useSWR(
+    admin && viewMode === 'all' ? ['rides', currentPage, filters] : null,
     () => {
       const params: GetRidesParams = {
         page: currentPage,
@@ -88,8 +102,30 @@ export default function RidesPage() {
     }
   );
 
-  const rides = ridesData?.results || [];
+  const { data: liveRides, mutate: mutateLive, isLoading: loadingLive } = useSWR(
+    admin && viewMode === 'live' ? 'rides-live' : null,
+    () => ridesApi.getLive(),
+    { refreshInterval: 15000 }
+  );
+
+  const { data: flaggedRides, mutate: mutateFlagged, isLoading: loadingFlagged } = useSWR(
+    admin && viewMode === 'flagged' ? 'rides-flagged' : null,
+    () => ridesApi.getIntelligence()
+  );
+
+  const rides: Ride[] = viewMode === 'live'
+    ? (liveRides || [])
+    : viewMode === 'flagged'
+      ? (flaggedRides || [])
+      : (ridesData?.results || []);
   const total = ridesData?.pagination?.total || 0;
+  const loading = viewMode === 'live' ? loadingLive : viewMode === 'flagged' ? loadingFlagged : loadingAll;
+
+  const mutateCurrent = () => {
+    mutateRides();
+    if (viewMode === 'live') mutateLive();
+    if (viewMode === 'flagged') mutateFlagged();
+  };
 
   const { data: companies = [] } = useSWR(
     admin ? 'companies' : null,
@@ -119,7 +155,7 @@ export default function RidesPage() {
     try {
       await ridesApi.updateStatus(rideId, status as RideStatus);
       mutateDetailedRide();
-      mutateRides();
+      mutateCurrent();
       addNotification('success', 'Status Updated', `Ride ${rideId} status changed to ${status}.`);
     } catch (error) {
       addNotification('warning', 'Update Failed', extractError(error));
@@ -133,7 +169,7 @@ export default function RidesPage() {
     try {
       await ridesApi.cancel(rideId);
       mutateDetailedRide();
-      mutateRides();
+      mutateCurrent();
       addNotification('success', 'Ride Cancelled', `Ride ${rideId} has been terminated.`);
     } catch (error) {
       addNotification('warning', 'Cancellation Failed', extractError(error));
@@ -156,10 +192,110 @@ export default function RidesPage() {
     try {
       await ridesApi.finalize(rideId);
       mutateDetailedRide();
-      mutateRides();
+      mutateCurrent();
       addNotification('success', 'Ride Finalized', `Ride ${rideId} has been finalized.`);
     } catch (error) {
       addNotification('warning', 'Finalization Failed', extractError(error));
+    }
+  };
+
+  const handleStart = async (rideId: number) => {
+    if (!admin) return;
+    try {
+      await ridesApi.start(rideId);
+      mutateDetailedRide();
+      mutateCurrent();
+      addNotification('success', 'Ride Started', `Ride ${rideId} is now ongoing.`);
+    } catch (error) {
+      addNotification('warning', 'Start Failed', extractError(error));
+    }
+  };
+
+  const handleResolveDispute = async (rideId: number, resolution: 'complete' | 'refund') => {
+    if (!admin) return;
+    try {
+      await ridesApi.resolveDispute(rideId, resolution, '');
+      setDisputeModal({ open: false, rideId: null });
+      mutateDetailedRide();
+      mutateCurrent();
+      addNotification('success', 'Dispute Resolved', `Resolution applied: ${resolution}.`);
+    } catch (error) {
+      addNotification('warning', 'Resolution Failed', extractError(error));
+    }
+  };
+
+  const handleNoShow = async (rideId: number, userId: number) => {
+    if (!admin || !window.confirm('Flag this passenger as a no-show? A penalty will be applied.')) return;
+    try {
+      await ridesApi.markNoShow(rideId, userId, {});
+      mutateDetailedRide();
+      addNotification('success', 'No-Show Flagged', 'Passenger marked as no-show.');
+    } catch (error) {
+      addNotification('warning', 'Action Failed', extractError(error));
+    }
+  };
+
+  const handleRemoveParticipant = async (rideId: number, userId: number, refund: boolean) => {
+    if (!admin || !window.confirm(refund ? 'Remove this passenger and issue a refund?' : 'Remove this passenger from the ride?')) return;
+    try {
+      await ridesApi.removeParticipant(rideId, userId, { refund });
+      mutateDetailedRide();
+      addNotification('success', 'Participant Removed', refund ? 'Passenger removed and refunded.' : 'Passenger removed.');
+    } catch (error) {
+      addNotification('warning', 'Removal Failed', extractError(error));
+    }
+  };
+
+  const handleAddParticipant = async (rideId: number) => {
+    if (!admin) return;
+    const userId = Number(addUserId);
+    if (!userId) { addNotification('warning', 'Invalid Input', 'Enter a valid user ID.'); return; }
+    try {
+      await ridesApi.addParticipant(rideId, { userId });
+      setAddUserId('');
+      mutateDetailedRide();
+      addNotification('success', 'Participant Added', `User ${userId} added to the ride.`);
+    } catch (error) {
+      addNotification('warning', 'Add Failed', extractError(error));
+    }
+  };
+
+  const openEditModal = (ride: RideDetail) => {
+    setEditForm({
+      departure_time: ride.departure_time ? new Date(ride.departure_time).toISOString().slice(0, 16) : '',
+      total_seats: String(ride.total_seats ?? ''),
+      price_per_seat: String(ride.price_per_seat ?? ''),
+      from_address: ride.from_address ?? '',
+      to_address: ride.to_address ?? '',
+      admin_notes: '',
+    });
+    setEditModal({ open: true, rideId: ride.id });
+  };
+
+  const submitEdit = async () => {
+    if (!admin || !editModal.rideId) return;
+    const payload: {
+      departure_time?: string;
+      total_seats?: number;
+      price_per_seat?: number;
+      from_address?: string;
+      to_address?: string;
+      admin_notes?: string;
+    } = {};
+    if (editForm.departure_time) payload.departure_time = new Date(editForm.departure_time).toISOString();
+    if (editForm.total_seats) payload.total_seats = Number(editForm.total_seats);
+    if (editForm.price_per_seat) payload.price_per_seat = Number(editForm.price_per_seat);
+    if (editForm.from_address) payload.from_address = editForm.from_address;
+    if (editForm.to_address) payload.to_address = editForm.to_address;
+    if (editForm.admin_notes) payload.admin_notes = editForm.admin_notes;
+    try {
+      await ridesApi.updateDetails(editModal.rideId, payload);
+      setEditModal({ open: false, rideId: null });
+      mutateDetailedRide();
+      mutateCurrent();
+      addNotification('success', 'Ride Updated', 'Ride details saved.');
+    } catch (error) {
+      addNotification('warning', 'Update Failed', extractError(error));
     }
   };
 
@@ -342,25 +478,51 @@ export default function RidesPage() {
       <div className="flex justify-between items-center mb-2">
         <div>
            <h2 className="text-xl font-black text-zinc-950 dark:text-white tracking-tight">Active Logistics</h2>
-           <p className="text-xs text-zinc-500 font-medium mt-0.5">Monitoring {total} transport sequences across the grid.</p>
+           <p className="text-xs text-zinc-500 font-medium mt-0.5">
+             {viewMode === 'all'
+               ? `Monitoring ${total} transport sequences across the grid.`
+               : viewMode === 'live'
+                 ? `${rides.length} rides currently in motion.`
+                 : `${rides.length} flagged rides requiring review.`}
+           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button 
-            variant={showFilters ? 'primary' : 'secondary'} 
-            size="md" 
-            onClick={() => setShowFilters(!showFilters)} 
-            className="rounded-xl h-11 px-4 gap-2"
-          >
-            <Filter className="w-4 h-4" />
-            <span className="text-[10px] font-black uppercase tracking-widest">{showFilters ? 'Hide Filters' : 'Filters'}</span>
-          </Button>
-          <Button variant="secondary" size="md" onClick={() => mutateRides()} className="rounded-xl h-11 px-4">
+          <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+            {([
+              { key: 'all', label: 'All', icon: Car },
+              { key: 'live', label: 'Live', icon: Radio },
+              { key: 'flagged', label: 'Flagged', icon: Activity },
+            ] as const).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => { setViewMode(key); setCurrentPage(1); }}
+                className={`flex items-center gap-1.5 px-3 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  viewMode === key ? 'bg-white dark:bg-zinc-950 text-zinc-950 dark:text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${key === 'live' && viewMode === 'live' ? 'text-emerald-500' : ''}`} />
+                {label}
+              </button>
+            ))}
+          </div>
+          {viewMode === 'all' && (
+            <Button
+              variant={showFilters ? 'primary' : 'secondary'}
+              size="md"
+              onClick={() => setShowFilters(!showFilters)}
+              className="rounded-xl h-11 px-4 gap-2"
+            >
+              <Filter className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">{showFilters ? 'Hide Filters' : 'Filters'}</span>
+            </Button>
+          )}
+          <Button variant="secondary" size="md" onClick={() => mutateCurrent()} className="rounded-xl h-11 px-4">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
 
-      {showFilters && (
+      {viewMode === 'all' && showFilters && (
         <div className="p-6 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 animate-in slide-in-from-top-2 duration-300">
           <div className="space-y-1.5">
             <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest ml-1">Status</label>
@@ -432,7 +594,7 @@ export default function RidesPage() {
         emptyMessage="Grid is clear. No trajectories match these parameters."
       />
 
-      {totalPages > 1 && (
+      {viewMode === 'all' && totalPages > 1 && (
         <div className="flex justify-center gap-1.5 pt-6">
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
             <button
@@ -562,9 +724,27 @@ export default function RidesPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
+                    {['active', 'full'].includes(detailedRide.status) && (
+                      <Button
+                        variant="primary"
+                        onClick={() => handleStart(detailedRide.id)}
+                        className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
+                      >
+                        <Play className="w-3.5 h-3.5" /> Start Ride
+                      </Button>
+                    )}
+                    {detailedRide.status === 'disputed' && (
+                      <Button
+                        variant="primary"
+                        onClick={() => setDisputeModal({ open: true, rideId: detailedRide.id })}
+                        className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
+                      >
+                        <Scale className="w-3.5 h-3.5" /> Resolve Dispute
+                      </Button>
+                    )}
                     {['active', 'full', 'ongoing'].includes(detailedRide.status) && (
-                      <Button 
-                        variant="destructive" 
+                      <Button
+                        variant="destructive"
                         onClick={() => handleCancel(detailedRide.id)}
                         className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
                       >
@@ -572,18 +752,25 @@ export default function RidesPage() {
                       </Button>
                     )}
                     {detailedRide.status === 'pending_completion' && (
-                      <Button 
-                        variant="primary" 
+                      <Button
+                        variant="primary"
                         onClick={() => handleForceFinalize(detailedRide.id)}
                         className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" /> Force Finalize
                       </Button>
                     )}
-                    <Button 
-                      variant="secondary" 
+                    <Button
+                      variant="secondary"
+                      onClick={() => openEditModal(detailedRide)}
+                      className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit Details
+                    </Button>
+                    <Button
+                      variant="secondary"
                       onClick={() => handleToggleChat(detailedRide.id, !isChatLocked(detailedRide))}
-                      className={`h-11 gap-2 text-[9px] font-black uppercase tracking-widest ${['active', 'full', 'ongoing'].includes(detailedRide.status) || detailedRide.status === 'pending_completion' ? 'col-span-1' : 'col-span-2'}`}
+                      className="h-11 gap-2 text-[9px] font-black uppercase tracking-widest"
                     >
                       {isChatLocked(detailedRide) ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                       {isChatLocked(detailedRide) ? 'Unlock Comms' : 'Lock Comms'}
@@ -740,20 +927,60 @@ export default function RidesPage() {
                     {detailedRide.participants?.length === 0 ? (
                        <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest py-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">No active participants</p>
                     ) : detailedRide.participants?.map((p, i) => (
-                      <div key={i} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-4">
-                        <div className="w-9 h-9 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-400 border border-zinc-100 dark:border-zinc-700">
-                          {p.first_name?.[0] || 'P'}
+                      <div key={i} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                        <div className="flex items-center gap-4">
+                          <div className="w-9 h-9 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-400 border border-zinc-100 dark:border-zinc-700">
+                            {p.first_name?.[0] || 'P'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight flex items-center gap-1.5">
+                              {p.first_name} {p.last_name}
+                              {p.is_driver && <Badge variant="zinc" className="h-4 px-1.5 text-[7px] font-black bg-zinc-950 text-white border-none">DRIVER</Badge>}
+                              {p.is_no_show && <Badge variant="error" className="h-4 px-1.5 text-[7px] font-black">NO-SHOW</Badge>}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-tighter truncate">{p.email}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <Badge variant="zinc" className="bg-zinc-950 text-white border-none h-6 px-2 text-[9px] font-black">
+                              {p.seats_booked} SEATS
+                            </Badge>
+                            {p.payment_status && (
+                              <Badge variant={p.payment_status === 'paid' || p.payment_status === 'completed' ? 'success' : 'warning'} className="h-4 px-1.5 text-[7px] font-black uppercase">
+                                {p.payment_status}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <p className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">{p.first_name} {p.last_name}</p>
-                          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-tighter">{p.email}</p>
-                        </div>
-                        <Badge variant="zinc" className="bg-zinc-950 text-white border-none h-6 px-2 text-[9px] font-black">
-                          {p.seats_booked} SEATS
-                        </Badge>
+                        {!p.is_driver && ['ongoing', 'pending_completion', 'active', 'full'].includes(detailedRide.status) && (
+                          <div className="flex gap-2">
+                            {!p.is_no_show && (
+                              <Button variant="secondary" size="sm" onClick={() => handleNoShow(detailedRide.id, p.user_id)} className="flex-1 h-8 text-[8px] font-black uppercase tracking-widest gap-1">
+                                <AlertTriangle className="w-3 h-3" /> No-Show
+                              </Button>
+                            )}
+                            <Button variant="destructive" size="sm" onClick={() => handleRemoveParticipant(detailedRide.id, p.user_id, (p.payment_status === 'paid' || p.payment_status === 'completed'))} className="flex-1 h-8 text-[8px] font-black uppercase tracking-widest gap-1">
+                              <UserMinus className="w-3 h-3" /> Remove{(p.payment_status === 'paid' || p.payment_status === 'completed') ? ' + Refund' : ''}
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
+
+                  {['active', 'full', 'ongoing'].includes(detailedRide.status) && (
+                    <div className="flex gap-2 pt-2">
+                      <input
+                        type="number"
+                        value={addUserId}
+                        onChange={(e) => setAddUserId(e.target.value)}
+                        placeholder="User ID to add"
+                        className="flex-1 h-10 px-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-zinc-950 transition-all"
+                      />
+                      <Button variant="secondary" size="sm" onClick={() => handleAddParticipant(detailedRide.id)} className="h-10 px-4 text-[9px] font-black uppercase tracking-widest gap-1.5">
+                        <UserPlus className="w-3.5 h-3.5" /> Add
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : activeDetailTab === 'chat' ? (
@@ -826,6 +1053,72 @@ export default function RidesPage() {
            </div>
         )}
       </Drawer>
+
+      <Modal
+        isOpen={disputeModal.open}
+        onClose={() => setDisputeModal({ open: false, rideId: null })}
+        title="Resolve Dispute"
+      >
+        <div className="space-y-6">
+          <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+            Choose how to settle this disputed ride. <span className="font-bold text-zinc-900 dark:text-white">Complete</span> finalizes the ride and releases payment to the driver. <span className="font-bold text-zinc-900 dark:text-white">Refund</span> reverses passenger payments.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              onClick={() => disputeModal.rideId && handleResolveDispute(disputeModal.rideId, 'complete')}
+              className="h-12 gap-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              <CheckCircle2 className="w-4 h-4" /> Complete
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => disputeModal.rideId && handleResolveDispute(disputeModal.rideId, 'refund')}
+              className="h-12 gap-2 text-[10px] font-black uppercase tracking-widest"
+            >
+              <DollarSign className="w-4 h-4" /> Refund
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={editModal.open}
+        onClose={() => setEditModal({ open: false, rideId: null })}
+        title="Edit Ride Details"
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Departure</label>
+              <input type="datetime-local" value={editForm.departure_time} onChange={(e) => setEditForm({ ...editForm, departure_time: e.target.value })} className="w-full h-10 px-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-zinc-950 transition-all" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Total Seats</label>
+              <input type="number" value={editForm.total_seats} onChange={(e) => setEditForm({ ...editForm, total_seats: e.target.value })} className="w-full h-10 px-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-zinc-950 transition-all" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Price Per Seat (ETB)</label>
+            <input type="number" value={editForm.price_per_seat} onChange={(e) => setEditForm({ ...editForm, price_per_seat: e.target.value })} className="w-full h-10 px-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-zinc-950 transition-all" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">From Address</label>
+            <input value={editForm.from_address} onChange={(e) => setEditForm({ ...editForm, from_address: e.target.value })} className="w-full h-10 px-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-zinc-950 transition-all" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">To Address</label>
+            <input value={editForm.to_address} onChange={(e) => setEditForm({ ...editForm, to_address: e.target.value })} className="w-full h-10 px-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-zinc-950 transition-all" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Admin Notes</label>
+            <textarea value={editForm.admin_notes} onChange={(e) => setEditForm({ ...editForm, admin_notes: e.target.value })} className="w-full h-20 p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-[10px] font-medium outline-none focus:ring-2 focus:ring-zinc-950 transition-all resize-none" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button variant="ghost" onClick={() => setEditModal({ open: false, rideId: null })} className="flex-1 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest">Cancel</Button>
+            <Button onClick={submitEdit} className="flex-1 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest">Save Changes</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
