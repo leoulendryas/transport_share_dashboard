@@ -457,15 +457,15 @@ export default function RidesPage() {
         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
           <div className="space-y-1">
             <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Passenger Pays</p>
-            <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">{audit.booking_summary.total_passenger_payable.toFixed(2)} ETB</p>
+            <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">{Number(audit.booking_summary.total_passenger_payable || 0).toFixed(2)} ETB</p>
             <p className="text-[8px] text-zinc-500 font-medium italic">Includes all fees</p>
           </div>
           <div className="space-y-1">
             <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Platform Fee</p>
-            <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">+{audit.platform_fee_breakdown.total_platform_fee.toFixed(2)} ETB</p>
+            <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">+{Number(audit.platform_fee_breakdown.total_platform_fee || 0).toFixed(2)} ETB</p>
             <div className="flex flex-wrap gap-2 mt-1">
-              <span className="text-[8px] font-bold text-zinc-500">VAT: {audit.platform_fee_breakdown.vat.toFixed(2)}</span>
-              <span className="text-[8px] font-bold text-zinc-500">Svc: {audit.platform_fee_breakdown.base_service_fee.toFixed(2)}</span>
+              <span className="text-[8px] font-bold text-zinc-500">VAT: {Number(audit.platform_fee_breakdown.vat || 0).toFixed(2)}</span>
+              <span className="text-[8px] font-bold text-zinc-500">Svc: {Number(audit.platform_fee_breakdown.base_service_fee || 0).toFixed(2)}</span>
             </div>
           </div>
         </div>

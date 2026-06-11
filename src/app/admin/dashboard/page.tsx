@@ -196,20 +196,21 @@ function GrowthCard({
   title, thisWeek, lastWeek, thisMonth, pct, suffix,
 }: {
   title: string;
-  thisWeek: number;
-  lastWeek: number;
-  thisMonth: number;
-  pct: number;
+  thisWeek: number | string;
+  lastWeek: number | string;
+  thisMonth: number | string;
+  pct: number | string;
   suffix: string;
 }) {
-  const up = (pct ?? 0) >= 0;
+  const pctNum = Number(pct) || 0;
+  const up = pctNum >= 0;
   return (
     <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-5">
         <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em]">{title}</h3>
         <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black ${up ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400'}`}>
           {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-          {up ? '+' : ''}{(pct ?? 0).toFixed(1)}%
+          {up ? '+' : ''}{pctNum.toFixed(1)}%
         </div>
       </div>
       <div className="grid grid-cols-3 gap-3">
@@ -221,7 +222,7 @@ function GrowthCard({
           <div key={m.label}>
             <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1">{m.label}</p>
             <p className="text-sm font-black text-zinc-950 dark:text-white tabular-nums">
-              {(m.value ?? 0).toLocaleString()}{suffix}
+              {(Number(m.value) || 0).toLocaleString()}{suffix}
             </p>
           </div>
         ))}
